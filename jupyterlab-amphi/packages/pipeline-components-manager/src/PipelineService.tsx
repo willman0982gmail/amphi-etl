@@ -148,16 +148,31 @@ export class PipelineService {
       .filter(pkgName => pkgName.trim() !== '')
       .map(pkgName => {
         if (pkgName.includes('[')) {
-          // Direct pip install for packages with extras (e.g., `ibis-framework[snowflake]`). why?
-          return `!pip install ${pkgName} -q -q`;
+          // Direct pip install for packages with extras (e.g., `ibis-framework[snowflake]`).
+          //this is meant for custom components or ibis sql alchemy only. If a built-in components needs extras, it must appears in requirements/setup.py
+          return `
+print('installing ${pkgName} with pip')
+!pip install ${pkgName} -q -q
+print('${pkgName} is now installed')
+`;
         } else {
           // Standard check for regular packages
+          //keep in mind the package name is not necessary the module name so don't use import
           return `
+from importlib.metadata import version, PackageNotFoundError
 try:
-    __import__("${pkgName}")
+    version('${pkgName}')
     print('${pkgName} is already installed')
-except ImportError:
-    !pip install ${pkgName} -q -q`;
+except PackageNotFoundError:
+    print('installing ${pkgName} with pip')
+    !pip install ${pkgName} -q -q
+#check again to be sure installation worked
+    try:
+        version('${pkgName}')
+        print('${pkgName} is now installed')
+    except PackageNotFoundError:
+        print('ERROR: Installation of ${pkgName} failed.')`
+;
         }
       });
   }
