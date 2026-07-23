@@ -1,15 +1,14 @@
 import { splitIcon } from '../../icons';
 import { BaseCoreComponent } from '../BaseCoreComponent';
 
-
 export class SplitColumn extends BaseCoreComponent {
   constructor() {
     const defaultConfig = {
-	tsCFradiosplitType: "columns",
-	tsCFbooleanRegex: false,
-	tsCFbooleanKeepOriginalColumn: false,
-	tsCFselectCustomizableConvertResult : "none"
-	};
+    tsCFradiosplitType: "columns",
+    tsCFbooleanRegex: false,
+    tsCFbooleanKeepOriginalColumn: false,
+    tsCFselectCustomizableConvertResult : "none"
+    };
     const form = {
       idPrefix: "component__form",
       fields: [
@@ -70,7 +69,7 @@ export class SplitColumn extends BaseCoreComponent {
           id: "tsCFbooleanKeepOriginalColumn",
           advanced: true
         },
-		{
+        {
           type: "selectCustomizable",
           label: "Convert result",
           id: "tsCFselectCustomizableConvertResult",
@@ -96,34 +95,34 @@ export class SplitColumn extends BaseCoreComponent {
  public provideFunctions({ config }): string[] {
     const prefix = config?.backend?.prefix ?? "pd";
     // Function to compare data
-    const tsSplit_Column_To_Row_Function = `
+    const tsSplitColumnToRowFunction = `
 def py_fn_split_dataframe_to_rows(
-    df: pd.DataFrame,
-    column_to_split: str,
-    new_column_name: str,
-    split_delimiter: str,
-    keep_original_column: bool = False,
-    is_regex: bool = False,
-    convert_result: str = "none",  # "none" | "string" | "auto"
+    py_arg_dataframe: pd.DataFrame,
+    py_arg_column_to_split: str,
+    py_arg_new_column_name: str,
+    py_arg_split_delimiter: str,
+    py_arg_keep_original_column: bool = False,
+    py_arg_is_regex: bool = False,
+    py_arg_convert_result: str = "none",  # "none" | "string" | "auto"
 ) -> pd.DataFrame:
     """
     Splits a string column into multiple rows based on a delimiter (or regex).
 
     Parameters
     ----------
-    df : pd.DataFrame
+    py_arg_dataframe : pd.DataFrame
         Input DataFrame.
-    column_to_split : str
+    py_arg_column_to_split : str
         Name of the column to split (can contain spaces or special characters).
-    new_column_name : str
+    py_arg_new_column_name : str
         Name for the resulting exploded column.
-    split_delimiter : str
+    py_arg_split_delimiter : str
         Delimiter or regex used to split the string.
-    keep_original_column : bool, default False
+    py_arg_keep_original_column : bool, default False
         If True, keeps the original column. Otherwise drops it.
-    is_regex : bool, default False
-        If True, interpret split_delimiter as a regex.
-    convert_result : none, string, auto, default none
+    py_arg_is_regex : bool, default False
+        If True, interpret py_arg_split_delimiter as a regex.
+    py_arg_convert_result : none, string, auto, default none
         - none   → keep the exploded column as-is.
         - string → convert the exploded column to pandas string dtype.
         - auto   → run convert_dtypes() on the entire DataFrame.
@@ -132,43 +131,43 @@ def py_fn_split_dataframe_to_rows(
     pd.DataFrame
         A new DataFrame with one row per split value.
     """
-    if convert_result not in {"none", "string", "auto"}:
-        raise ValueError("convert_result must be one of: 'none', 'string', or 'auto'")
+    if py_arg_convert_result not in {"none", "string", "auto"}:
+        raise ValueError("py_arg_convert_result must be one of: 'none', 'string', or 'auto'")
         
     # Make a copy to avoid modifying original data
-    df = df.copy()
+    df = py_arg_dataframe.copy()
 
     # Perform the split safely (supports regex and handles missing values)
-    split_col = df[column_to_split].astype("string").str.split(split_delimiter, regex=is_regex)
+    split_col = df[py_arg_column_to_split].astype("string").str.split(py_arg_split_delimiter, regex=py_arg_is_regex)
 
     # Add the split column
-    df = df.assign(**{new_column_name: split_col})
+    df = df.assign(**{py_arg_new_column_name: split_col})
 
     # Explode into multiple rows
-    df = df.explode(new_column_name, ignore_index=True)
+    df = df.explode(py_arg_new_column_name, ignore_index=True)
 
     # Handle type conversion modes
-    if convert_result == "string":
-        df[new_column_name] = df[new_column_name].astype("string")
-    elif convert_result == "auto":
+    if py_arg_convert_result == "string":
+        df[py_arg_new_column_name] = df[py_arg_new_column_name].astype("string")
+    elif py_arg_convert_result == "auto":
         # Try best-effort numeric conversion, fallback gracefully
         try:
-            df[new_column_name] = pd.to_numeric(df[new_column_name])
+            df[py_arg_new_column_name] = pd.to_numeric(df[py_arg_new_column_name])
         except Exception:
-            df[new_column_name] = df[[new_column_name]].convert_dtypes()[new_column_name]
+            df[py_arg_new_column_name] = df[[py_arg_new_column_name]].convert_dtypes()[py_arg_new_column_name]
         
     # Drop the original column if requested
-    if not keep_original_column and new_column_name != column_to_split:
-        df = df.drop(columns=[column_to_split])
+    if not py_arg_keep_original_column and py_arg_new_column_name != py_arg_column_to_split:
+        df = df.drop(columns=[py_arg_column_to_split])
 
     return df
     `;
     if (config.tsCFradiosplitType === "rows") {
-      return [tsSplit_Column_To_Row_Function]; 
+      return [tsSplitColumnToRowFunction]; 
     } else {
       return [];
     }
-  }	
+  }
 
 
   public generateComponentCode({ config, inputName, outputName }): string {
@@ -218,24 +217,32 @@ def py_fn_split_dataframe_to_rows(
       }
     }
 
-	else if (config.tsCFradiosplitType === "rows") {
+    else if (config.tsCFradiosplitType === "rows") {
       // Split to rows. if we keep original column, we have to rename the new one. Moreover, assign only accept a kwarg like argument (so no quoted, so space..)
-      const const_ts_column_to_split = columnNamed ? columnName : columnAccess; // Added to fix https://github.com/amphi-ai/amphi-etl/issues/235
-      const const_ts_boolean_keepOriginalColumn= config.tsCFbooleanKeepOriginalColumn ? "True" : "False";
-	  //if null, undefined or empty
-      const const_ts_new_column_name =
+      const tsConstColumnToSplit = columnNamed ? columnName : columnAccess; // Added to fix https://github.com/amphi-ai/amphi-etl/issues/235
+      const tsConstKeepOriginalColumn= config.tsCFbooleanKeepOriginalColumn ? "True" : "False";
+      //if null, undefined or empty
+      const tsConstNewColumnName =
       config.tsCFinputNameNewColumn && config.tsCFinputNameNewColumn.length > 0
         ? config.tsCFinputNameNewColumn
-        : const_ts_column_to_split;
-	  const const_ts_split_delimiter = config.tsCFselectCustomizableDelimiter;
-	  const const_ts_boolean_is_regex= config.tsCFbooleanRegex ? "False" : "True";
-	  const const_ts_convert_result=config.tsCFselectCustomizableConvertResult;
-	  code += `${outputName}=py_fn_split_dataframe_to_rows(df=${inputName},keep_original_column=${const_ts_boolean_keepOriginalColumn},column_to_split='${const_ts_column_to_split}',new_column_name='${const_ts_new_column_name}',split_delimiter='${const_ts_split_delimiter}',is_regex=${const_ts_boolean_is_regex},convert_result='${const_ts_convert_result}')\n`;
+        : tsConstColumnToSplit;
+      const tsConstSplitDelimiter = config.tsCFselectCustomizableDelimiter;
+      const tsConstIsRegex= config.tsCFbooleanRegex ? "True" : "False";
+      const tsConstConvertResult=config.tsCFselectCustomizableConvertResult;
+      code += `
+${outputName} = py_fn_split_dataframe_to_rows(
+    py_arg_dataframe=${inputName},
+    py_arg_keep_original_column=${tsConstKeepOriginalColumn},
+    py_arg_column_to_split='${tsConstColumnToSplit}',
+    py_arg_new_column_name='${tsConstNewColumnName}',
+    py_arg_split_delimiter='${tsConstSplitDelimiter}',
+    py_arg_is_regex=${tsConstIsRegex},
+    py_arg_convert_result='${tsConstConvertResult}'
+)\n`;
     }
   
     // Return the generated code
     return code;
   }
-
 
 }
