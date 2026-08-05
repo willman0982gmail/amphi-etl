@@ -29,6 +29,8 @@ export class CodeGenerator extends BaseCodeGenerator {
     const functions = new Set<string>();
     const envMap = new Map<string, Node>();
     const connMap = new Map<string, Node>();
+    const sparkSessionMap = new Map<string, Node>();
+    const sparkSessionStopMap = new Map<string, Node>();
 
     const { nodesToTraverse, nodesMap } = this.computeNodesToTraverse(
       flow,
@@ -43,16 +45,29 @@ export class CodeGenerator extends BaseCodeGenerator {
         envMap.set(node.id, node);
       } else if (type === 'connection') {
         connMap.set(node.id, node);
+      } else if (type === 'spark_session') {
+        sparkSessionMap.set(node.id, node);
+      } else if (type === 'spark_session_stop') {
+        sparkSessionStopMap.set(node.id, node);
       }
     });
 
-    // Build node objects
+    if (sparkSessionMap.size > 1) {
+      console.warn(
+        'Amphi: multiple Spark Connect Session nodes found; only one is recommended per pipeline.'
+      );
+    }
+
+    const hasSparkSession = sparkSessionMap.size > 0;
+
+    // Build node objects (inject shared-session hint for Spark SQL Input)
     const nodeObjects = this.createNodeObjects(
       flow,
       componentService,
       nodesToTraverse,
       nodesMap,
-      variablesAutoNaming
+      variablesAutoNaming,
+      { hasSparkSession }
     );
 
     // Process
@@ -83,6 +98,22 @@ export class CodeGenerator extends BaseCodeGenerator {
               executedNodes.add(nodeObj.id);
             }
             displayCode = `\n_amphi_display_documents_as_html(${nodeObj.outputName})`;
+          } else if (nodeObj.type === 'spark_df_to_pandas_processor') {
+            if (!fromStart) {
+              codeList.length = 0;
+              codeList.push(nodeObj.code);
+              executedNodes.clear();
+              executedNodes.add(nodeObj.id);
+            }
+            displayCode = `__amphi_display(${nodeObj.outputName}, dfName="${nodeObj.outputName}", nodeId="${targetNodeId}"${nodeObj.runtime !== "local" ? `, runtime="${nodeObj.runtime}"` : ''})`;
+          } else if (nodeObj.type === 'pandas_df_to_spark_processor' || nodeObj.type.startsWith('spark_df')) {
+            if (!fromStart) {
+              codeList.length = 0;
+              codeList.push(nodeObj.code);
+              executedNodes.clear();
+              executedNodes.add(nodeObj.id);
+            }
+            displayCode = `\n${nodeObj.outputName}.show(20)\nprint(${nodeObj.outputName})`;
           } else {
             if (!fromStart) {
               codeList.length = 0;
@@ -132,6 +163,27 @@ export class CodeGenerator extends BaseCodeGenerator {
       comp.provideImports({ config }).forEach(i => uniqueImports.add(i));
     });
 
+    let sparkSessionCode = '';
+    sparkSessionMap.forEach(node => {
+      const comp = componentService.getComponent(node.type);
+      const config: any = node.data;
+      sparkSessionCode += comp.generateComponentCode({ config });
+      comp.provideImports({ config }).forEach(i => uniqueImports.add(i));
+      if (typeof comp.provideDependencies === 'function') {
+        comp.provideDependencies({ config }).forEach(d => uniqueDependencies.add(d));
+      }
+    });
+
+    let sparkSessionStopCode = '';
+    sparkSessionStopMap.forEach(node => {
+      const comp = componentService.getComponent(node.type);
+      const config: any = node.data;
+      sparkSessionStopCode += comp.generateComponentCode({ config });
+      if (typeof comp.provideImports === 'function') {
+        comp.provideImports({ config }).forEach(i => uniqueImports.add(i));
+      }
+    });
+
     // Final build
     const now = new Date();
     const dateString = now.toISOString().replace(/T/, ' ').replace(/\..+/, '');
@@ -144,8 +196,10 @@ export class CodeGenerator extends BaseCodeGenerator {
       ...Array.from(uniqueImports),
       envVariablesCode,
       connectionsCode,
+      sparkSessionCode,
       ...Array.from(functions),
-      ...codeList
+      ...codeList,
+      sparkSessionStopCode
     ].filter(Boolean);
 
     const formatted = finalList.map(code => this.formatVariables(code));

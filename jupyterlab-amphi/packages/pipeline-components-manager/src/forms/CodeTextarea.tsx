@@ -24,6 +24,13 @@ export const CodeTextarea = ({
   const getInitialValues = () => {
     try {
       if (!value) return { code: '', instructions: '' };
+      // Pipeline JSON may already store this field as an object { code, instructions }.
+      if (typeof value === 'object') {
+        return {
+          code: typeof (value as any).code === 'string' ? (value as any).code : '',
+          instructions: typeof (value as any).instructions === 'string' ? (value as any).instructions : ''
+        };
+      }
       const parsed = JSON.parse(value);
       // If it's a JSON object, return its parts
       if (parsed && typeof parsed === 'object') {
@@ -34,7 +41,7 @@ export const CodeTextarea = ({
       }
     } catch (e) {
       // Fallback: if value is just a plain string (legacy code), treat it as code
-      return { code: value, instructions: '' };
+      return { code: typeof value === 'string' ? value : '', instructions: '' };
     }
     return { code: '', instructions: '' };
   };

@@ -17,6 +17,7 @@ import KeyValueForm from './forms/keyValueForm';
 import SelectColumn from './forms/selectColumn';
 import SelectColumns from './forms/selectColumns';
 import SelectFromSQLQuery from './forms/selectFromSQLQuery';
+import SelectFromSparkQuery from './forms/selectFromSparkQuery';
 import SelectFromPythonQuery from './forms/selectFromPythonQuery';
 import SelectCustomizable from './forms/selectCustomizable';
 import SelectMultiple from './forms/selectMultiple';
@@ -363,6 +364,8 @@ export const GenerateUIInputs = React.memo(({
         return renderFormItem(field, <SelectColumn {...commonProps} defaultValue={value} componentService={componentService} commands={commands} nodeId={nodeId} />);
       case "table":
         return renderFormItem(field, <SelectFromSQLQuery {...commonProps} data={data} defaultValue={value} componentService={componentService} commands={commands} nodeId={nodeId} />);
+      case "sparkTable":
+        return renderFormItem(field, <SelectFromSparkQuery {...commonProps} data={data} defaultValue={value} componentService={componentService} commands={commands} nodeId={nodeId} />);
       case "collection":
         return renderFormItem(field, <SelectFromPythonQuery {...commonProps} data={data} defaultValue={value} componentService={componentService} commands={commands} nodeId={nodeId} />);
       case "sheets":
@@ -670,7 +673,7 @@ export interface Option {
 }
 
 export interface FieldDescriptor {
-  type: 'file' | 'files' | 'column' | 'columns' | 'table' | 'keyvalue' | 'valuesList' | 'input' | 'password' | 'select' | 'textarea' | 'codeTextarea' | 'radio'
+  type: 'file' | 'files' | 'column' | 'columns' | 'table' | 'sparkTable' | 'keyvalue' | 'valuesList' | 'input' | 'password' | 'select' | 'textarea' | 'codeTextarea' | 'radio'
   | 'cascader' | 'boolean' | 'inputNumber' | 'selectCustomizable' | 'selectTokenization' | 'transferData' | 'keyvalueColumns' | 'keyvalueColumnsSelect' | 'columnOperationColumn' | 'sheets'
   | 'dataMapping' | 'editableTable' | 'info' | 'cascaderMultiple' | 'selectMultiple' | 'selectMultipleCustomizable' | 'formulaColumns' | 'keyvalueColumnsRadio' | 'date' | 'collection';
   label: string;

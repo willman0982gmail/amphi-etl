@@ -13,7 +13,12 @@ export class Connection extends PipelineComponent<ComponentItem>() {
   public _category = "configuration";
   public _description = `Use Connection to set up a connection (e.g., credentials, database parameters, configuration file)
   once for the pipeline, and reuse it across different components. This approach ensures that no credentials are stored 
-  in the pipeline, as they can be retrieved from environment variables or a configuration files.`;
+  in the pipeline, as they can be retrieved from environment variables or a configuration files.
+
+  For Spark SQL Input (connection type SparkConnect), recommended keys / env names:
+  SPARK_CONNECT_URL or SPARK_REMOTE (e.g. sc://host:15002), SPARK_TOKEN (optional),
+  SPARK_USER / SPARK_PASSWORD (optional userpass), DATABRICKS_CLUSTER_ID (Databricks preset),
+  SPARK_APP_NAME (optional).`;
   public _icon = keyIcon;
   public _default = {};
   public _form = {};

@@ -33,7 +33,6 @@ import { showErrorModal } from './ErrorModal';
 import { PipelineExecutionService } from './ExecutionService';
 import posthog from 'posthog-js'
 
-import { LabIcon } from '@jupyterlab/ui-components';
 import React from 'react';
 
 /**
@@ -50,7 +49,10 @@ namespace CommandIDs {
 
 }
 
-const PIPELINE_FACTORY = 'Pipeline Editor';
+// Must be unique across JupyterLab extensions. Elyra also registers
+// a factory named "Pipeline Editor"; a collision causes DocumentRegistry
+// to ignore the second registration, so .ampln files open with Elyra.
+const PIPELINE_FACTORY = 'Amphi Pipeline Editor';
 const PIPELINE = 'amphi-pipeline';
 const PIPELINE_EDITOR_NAMESPACE = 'amphi-pipeline-editor';
 const EXTENSION_ID = '@amphi/pipeline-editor:extension';
@@ -116,6 +118,7 @@ const pipelineEditor: JupyterFrontEndPlugin<WidgetTracker<DocumentWidget>> = {
     let enableDebugMode: boolean;
     let enableTelemetry: boolean;
     let defaultEngineBackend: string;
+    let pipelineFactoryReady = false;
 
     // Fetch the initial state of the settings.
     function loadSetting(setting: ISettingRegistry.ISettings): void {
@@ -148,8 +151,134 @@ const pipelineEditor: JupyterFrontEndPlugin<WidgetTracker<DocumentWidget>> = {
       }
     }
 
-    Promise.all([app.restored, settings.load(EXTENSION_ID)])
-      .then(([, settings]) => {
+    // Register create command + launcher immediately (do not wait for
+    // app.restored / settings). Waiting on app.restored previously meant the
+    // Amphi launcher tiles never appeared when restoration hung or when an
+    // error occurred earlier in the settings.then() chain.
+    if (!commands.hasCommand(command)) {
+      commands.addCommand(command, {
+        label: args =>
+          args['isPalette'] || args['isContextMenu']
+            ? 'New Pipeline'
+            : 'Amphi Pipeline',
+        caption: 'Create a new Amphi pipeline (.ampln)',
+        // Amphi brand tile (teal #5F9B97 + white pipeline glyph), matching
+        // component accent color used across Amphi UI.
+        icon: pipelineCategoryIcon,
+        execute: async args => {
+          // Wait briefly for factory registration if user clicks very early.
+          for (let i = 0; i < 50 && !pipelineFactoryReady; i++) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+          if (!pipelineFactoryReady) {
+            throw new Error(
+              'Amphi Pipeline Editor is still initializing. Try again in a moment.'
+            );
+          }
+
+          const cwd =
+            (args['cwd'] as string) || defaultFileBrowser.model.path;
+
+          return commands
+            .execute(commandIDs.newDocManager, {
+              type: 'file',
+              path: cwd,
+              ext: '.ampln'
+            })
+            .then(async model => {
+              const runtime_type = 'LOCAL';
+
+              const getPipelineId = () => `pipeline_${+new Date()}`;
+
+              const pipelineJson = {
+                doc_type: 'Amphi Pipeline',
+                version: '1',
+                id: getPipelineId(),
+                pipelines: [
+                  {
+                    id: 'primary',
+                    flow: {
+                      nodes: [],
+                      edges: [],
+                      viewport: {
+                        x: 0,
+                        y: 0,
+                        zoom: 1
+                      }
+                    },
+                    app_data: {
+                      ui_data: {
+                        comments: []
+                      },
+                      version: 1,
+                      runtime_type
+                    },
+                    runtime_ref: 'python'
+                  }
+                ]
+              };
+
+              const newWidget = await app.commands.execute(
+                commandIDs.openDocManager,
+                {
+                  path: model.path,
+                  factory: PIPELINE_FACTORY
+                }
+              );
+
+              newWidget.context.ready.then(() => {
+                newWidget.context.model.fromJSON(pipelineJson);
+                app.commands.execute(commandIDs.saveDocManager, {
+                  path: model.path
+                });
+              });
+            });
+        }
+      });
+    }
+
+    // Elyra-style: register launcher tiles synchronously during activate.
+    // - "Amphi" = dedicated section (appears after Notebook/Console/Other)
+    // - "Other" = fallback so the tile is visible even if a custom section
+    //   fails to render for any reason
+    launcher.add({
+      command: CommandIDs.create,
+      category: 'Amphi',
+      rank: 0
+    });
+    launcher.add({
+      command: CommandIDs.create,
+      category: 'Other',
+      rank: 0
+    });
+    console.log(
+      'Amphi launcher tiles registered synchronously (Amphi + Other)'
+    );
+
+    // Also expose under File → New (does not depend on Launcher UI).
+    try {
+      menu.fileMenu.newMenu.addGroup([{ command: CommandIDs.create }], 35);
+    } catch (e) {
+      console.warn('Amphi: failed to add File→New menu item', e);
+    }
+
+    // Palette + context menu (also independent of Launcher)
+    palette.addItem({
+      command: CommandIDs.create,
+      category: 'Amphi',
+      args: { isPalette: true }
+    });
+    app.contextMenu.addItem({
+      command: CommandIDs.create,
+      selector: '.jp-DirListing-content',
+      rank: 100
+    });
+
+    // Factory / settings: only wait for settings.load — do NOT block on
+    // app.restored (that can hang and previously delayed launcher setup).
+    settings
+      .load(EXTENSION_ID)
+      .then(settings => {
         // Read the settings
         loadSetting(settings);
 
@@ -226,6 +355,8 @@ const pipelineEditor: JupyterFrontEndPlugin<WidgetTracker<DocumentWidget>> = {
           [PIPELINE_FACTORY, 'JSON']
         );
         app.docRegistry.addWidgetFactory(pipelineEditorFactory);
+        pipelineFactoryReady = true;
+        console.log('Amphi Pipeline Editor factory registered');
 
         app.docRegistry.addFileType(
           {
@@ -249,82 +380,6 @@ const pipelineEditor: JupyterFrontEndPlugin<WidgetTracker<DocumentWidget>> = {
           },
           ['JSON']
         );
-
-
-        // Add command to create new Pipeline
-        commands.addCommand(command, {
-          label: args =>
-            args['isPalette'] || args['isContextMenu']
-              ? 'New Pipeline'
-              : 'New Pipeline',
-          caption: 'Create a new pipeline',
-          icon: (args) => (args['isPalette'] ? null : pipelineCategoryIcon),
-          execute: async args => {
-
-            return commands.execute(commandIDs.newDocManager, {
-              type: 'file',
-              path: defaultFileBrowser.model.path,
-              ext: '.ampln'
-            })
-              .then(async model => {
-                const runtime_type = 'LOCAL';
-
-                const getPipelineId = () => `pipeline_${+new Date()}`;
-
-                const pipelineJson = {
-                  doc_type: 'Amphi Pipeline',
-                  version: '1',
-                  id: getPipelineId(),
-                  pipelines: [
-                    {
-                      id: 'primary',
-                      flow: {
-                        nodes: [
-                        ],
-                        edges: [
-                        ],
-                        viewport: {
-                          x: 0,
-                          y: 0,
-                          zoom: 1
-                        }
-                      },
-                      app_data: {
-                        ui_data: {
-                          comments: []
-                        },
-                        version: 1,
-                        runtime_type
-                      },
-                      runtime_ref: 'python'
-                    }
-                  ]
-                };
-
-                // Open Pipeline using Pipeline EditorFactory
-                const newWidget = await app.commands.execute(
-                  commandIDs.openDocManager,
-                  {
-                    path: model.path,
-                    factory: PIPELINE_FACTORY // Use PipelineEditorFactory
-                  }
-                );
-
-                // Assign to the new widget context the pipeline JSON from above
-                newWidget.context.ready.then(() => {
-
-                  newWidget.context.model.fromJSON(pipelineJson);
-
-                  // Save this in the file
-                  app.commands.execute(commandIDs.saveDocManager, {
-                    path: model.path
-                  });
-
-                });
-              });
-
-          }
-        });
 
         // Get the current widget and activate unless the args specify otherwise.
         function getCurrent(args: ReadonlyPartialJSONObject): any | null {
@@ -767,6 +822,7 @@ ${code}
 
         commands.addCommand('pipeline-editor:version', {
           label: 'About Amphi',
+          icon: pipelineCategoryIcon,
           execute: () => {
             const { title, body } = createAboutDialog(LIB_VERSION);
 
@@ -783,25 +839,19 @@ ${code}
           },
         });
 
-        // Add the command to the context menu
-        app.contextMenu.addItem({
-          command: CommandIDs.create,
-          selector: '.jp-DirListing-content',
-          rank: 100,
-        });
-
-        // Add to palette
-        palette.addItem({
-          command: CommandIDs.create,
-          category: 'Pipeline',
-          args: { isPalette: true }
-        });
-
         palette.addItem({
           command: 'pipeline-editor:version',
           category: 'Help',
           args: { isPalette: true }
         });
+
+        if (launcher) {
+          launcher.add({
+            command: 'pipeline-editor:version',
+            category: 'Amphi',
+            rank: 10
+          });
+        }
 
         palette.addItem({
           command: CommandIDs.generateCode,
@@ -984,19 +1034,6 @@ ${code}
             rank: item.rank
           });
         });
-
-        // ----
-        // ----
-
-
-        // Add launcher
-        if (launcher) {
-          launcher.add({
-            command: CommandIDs.create,
-            category: 'Amphi',
-            rank: 3
-          });
-        }
 
       })
       .catch(reason => {

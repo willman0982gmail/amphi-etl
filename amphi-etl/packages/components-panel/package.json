@@ -50,20 +50,20 @@
   },
   "dependencies": {
     "@amphi/pipeline-components-manager": "file:../../../jupyterlab-amphi/packages/pipeline-components-manager",
-    "@jupyterlab/application": "^4.0.9",
-    "@jupyterlab/apputils": "^4.0.9",
-    "@jupyterlab/ui-components": "^4.0.9",
+    "@jupyterlab/application": "^4.4.0",
+    "@jupyterlab/apputils": "^4.5.0",
+    "@jupyterlab/ui-components": "^4.4.0",
     "antd": "5.24.4",
     "react": "^18.2.0",
     "typescript": "~5.0.4"
   },
   "resolutions": {
-    "@jupyterlab/rendermime-interfaces": "^4.0.9",
+    "@jupyterlab/rendermime-interfaces": "^3.12.0",
     "@lumino/widgets": "^2.0.0",
     "@types/react": "^18.2.7"
   },
   "devDependencies": {
-    "@jupyterlab/builder": "^4.0.9",
+    "@jupyterlab/builder": "^4.4.0",
     "@typescript-eslint/eslint-plugin": "^4.8.1",
     "@typescript-eslint/parser": "^4.8.1",
     "eslint": "^7.14.0",

@@ -31,7 +31,7 @@ RUN chown -R 1000:100 /home/amphi
 RUN python3 -m pip install numpy pandas==2.2.1 python-dotenv
 
 # Install required Python packages from requirements.txt
-RUN python3 -m pip install jupyterlab==4.2.5
+RUN python3 -m pip install 'jupyterlab>=4.4.0,<5'
 RUN python3 -m pip install jupyterlab-amphi==0.8.1
 
 # Provide theme and ui-component

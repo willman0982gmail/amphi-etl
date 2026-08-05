@@ -65,7 +65,7 @@
         "test": "jlpm test:py"
     },
     "devDependencies": {
-        "@jupyterlab/builder": "^4.1.5",
+        "@jupyterlab/builder": "^4.4.0",
         "lerna": "^7.2.0",
         "rimraf": "^5.0.1",
         "typescript": "~5.2.2",

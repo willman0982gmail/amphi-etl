@@ -52,6 +52,7 @@ export const renderHandle: React.FC<IHandleProps> = ({ type, Handle, Position, i
     case "ibis_df_input":
     case "pandas_df_input":
     case "documents_input":
+    case "spark_df_input":
       return (
         <Handle
           className="handle-right"
@@ -63,6 +64,7 @@ export const renderHandle: React.FC<IHandleProps> = ({ type, Handle, Position, i
     case "ibis_df_output":
     case "pandas_df_output":
     case "documents_output":
+    case "spark_df_output":
       return (
         <LimitedInputHandle type="target" position={Position.Left} isConnectable={1} className="handle-left" id="in" />
       );
@@ -70,6 +72,9 @@ export const renderHandle: React.FC<IHandleProps> = ({ type, Handle, Position, i
     case "pandas_df_processor":
     case 'pandas_df_to_documents_processor':
     case 'documents_processor':
+    case 'spark_df_processor':
+    case 'spark_df_to_pandas_processor':
+    case 'pandas_df_to_spark_processor':
       return (
         <>
           <LimitedInputHandle type="target" position={Position.Left} isConnectable={1} className="handle-left" id="in" />
@@ -83,6 +88,7 @@ export const renderHandle: React.FC<IHandleProps> = ({ type, Handle, Position, i
       );
     case 'ibis_df_multi_processor':
     case 'pandas_df_multi_processor':
+    case 'spark_df_multi_processor':
       return (
         <>
           <LimitedInputHandle type="target" position={Position.Left} isConnectable={true} className="handle-left" id="in" />
@@ -96,6 +102,7 @@ export const renderHandle: React.FC<IHandleProps> = ({ type, Handle, Position, i
       );
     case "ibis_df_double_processor":
     case "pandas_df_double_processor":
+    case "spark_df_double_processor":
       return (
         <>
           <LimitedInputHandle type="target" position={Position.Left} isConnectable={1} className="handle-left handle-left--dual" id="in1" />

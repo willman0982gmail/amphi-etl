@@ -58,21 +58,15 @@ export const CodeTextareaMirror: React.FC<CodeTextareaMirrorProps> = ({
       // Attach the editor wrapper to the DOM
       editorRef.current.appendChild(editorWrapperRef.current.node);
 
-      // Insert initial value only if `value` is not empty
-      if (sharedModel.ysource && value) {
-        sharedModel.ysource.insert(0, value);
-      } else {
-      }
-
-      // Set initial value in the editor
-      if (sharedModel.ysource && value) {
-        sharedModel.ysource.insert(0, value);
+      const initial = value == null ? '' : String(value);
+      if (sharedModel.ysource && initial) {
+        sharedModel.ysource.insert(0, initial);
       }
 
       // Sync editor changes to parent component
       sharedModel.ysource.observe(() => {
         const newValue = sharedModel.ysource.toString();
-        if (newValue !== value) {
+        if (newValue !== String(value ?? '')) {
           handleChange(newValue, field.id);
         }
       });
@@ -84,9 +78,10 @@ export const CodeTextareaMirror: React.FC<CodeTextareaMirrorProps> = ({
   useEffect(() => {
     if (sharedModelRef.current && sharedModelRef.current.ysource) {
       const currentValue = sharedModelRef.current.ysource.toString();
-      if (value && value !== currentValue) {
+      const next = value == null ? '' : String(value);
+      if (next && next !== currentValue) {
         sharedModelRef.current.ysource.delete(0, currentValue.length);
-        sharedModelRef.current.ysource.insert(0, value);
+        sharedModelRef.current.ysource.insert(0, next);
       }
     } else {
       console.error("ysource is not initialized correctly during update.");

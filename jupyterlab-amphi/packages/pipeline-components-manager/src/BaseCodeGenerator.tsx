@@ -41,7 +41,7 @@ export abstract class BaseCodeGenerator {
 
     flow.nodes.forEach(node => {
       const type = componentService.getComponent(node.type)._type;
-      if (!['annotation', 'logger', 'env_variables', 'env_file', 'connection'].includes(type)) {
+      if (!['annotation', 'logger', 'env_variables', 'env_file', 'connection', 'spark_session', 'spark_session_stop'].includes(type)) {
         nodesMap.set(node.id, node);
       }
     });
@@ -111,7 +111,8 @@ export abstract class BaseCodeGenerator {
     componentService: any,
     nodesToTraverse: string[],
     nodesMap: Map<string, Node>,
-    variablesAutoNaming: boolean
+    variablesAutoNaming: boolean,
+    flags: { hasSparkSession?: boolean } = {}
   ): NodeObject[] {
     const nodeObjects: NodeObject[] = [];
     const counters = new Map<string, number>();
@@ -145,7 +146,10 @@ export abstract class BaseCodeGenerator {
         continue;
       }
 
-      const config: any = node.data || {};
+      const config: any = {
+        ...(node.data || {}),
+        ...(flags.hasSparkSession ? { _amphiHasSparkSession: true } : {})
+      };
       const component = componentService.getComponent(node.type);
       const componentType = component._type;
       const componentId = component._id;
@@ -176,7 +180,10 @@ export abstract class BaseCodeGenerator {
           case 'pandas_df_processor':
           case 'pandas_df_to_documents_processor':
           case 'ibis_df_processor':
-          case 'documents_processor': {
+          case 'documents_processor':
+          case 'spark_df_processor':
+          case 'spark_df_to_pandas_processor':
+          case 'pandas_df_to_spark_processor': {
             const previousNodeId = PipelineService.findPreviousNodeId(flow, nodeId);
             inputName = getInputName(previousNodeId, componentType);
 
@@ -200,7 +207,8 @@ export abstract class BaseCodeGenerator {
             break;
           }
           case 'ibis_df_double_processor':
-          case 'pandas_df_double_processor': {
+          case 'pandas_df_double_processor':
+          case 'spark_df_double_processor': {
             const [input1Id, input2Id] = PipelineService.findMultiplePreviousNodeIds(flow, nodeId);
             const inputName1 = getInputName(input1Id, componentType);
             const inputName2 = getInputName(input2Id, componentType);
@@ -210,7 +218,8 @@ export abstract class BaseCodeGenerator {
             break;
           }
           case 'ibis_df_multi_processor':
-          case 'pandas_df_multi_processor': {
+          case 'pandas_df_multi_processor':
+          case 'spark_df_multi_processor': {
             const inputIds = PipelineService.findMultiplePreviousNodeIds(flow, nodeId);
             const inputNames = inputIds.map(id => getInputName(id, componentType));
             outputName = getOutputName(node, componentId, variablesAutoNaming)
@@ -219,7 +228,8 @@ export abstract class BaseCodeGenerator {
             break;
           }
           case 'pandas_df_input':
-          case 'documents_input': {
+          case 'documents_input':
+          case 'spark_df_input': {
             outputName = getOutputName(node, componentId, variablesAutoNaming)
             nodeOutputs.set(nodeId, outputName);
             code += component.generateComponentCode({ config, outputName });
@@ -264,7 +274,8 @@ export abstract class BaseCodeGenerator {
           }
           case 'ibis_df_output':
           case 'pandas_df_output':
-          case 'documents_output': {
+          case 'documents_output':
+          case 'spark_df_output': {
             const previousNodeId = PipelineService.findPreviousNodeId(flow, nodeId);
             inputName = getInputName(previousNodeId, componentType);
 
@@ -415,6 +426,65 @@ export abstract class BaseCodeGenerator {
 
     const importsCode = Array.from(uniqueImports).join('\n');
     return `${importsCode}\n\n${codeAccumulator}`;
+  }
+
+  static getSparkSessionCode(
+    pipelineJson: string,
+    componentService: any
+  ): string {
+    const flow = PipelineService.filterPipeline(pipelineJson);
+    const sparkSessionMap = new Map<string, Node>();
+    const uniqueImports = new Set<string>();
+
+    flow.nodes.forEach(node => {
+      const type = componentService.getComponent(node.type)._type;
+      if (type === 'spark_session') {
+        sparkSessionMap.set(node.id, node);
+      }
+    });
+
+    if (sparkSessionMap.size === 0) {
+      return '# No Spark Connect Session components found.';
+    }
+
+    let codeAccumulator = '';
+    sparkSessionMap.forEach(node => {
+      const component = componentService.getComponent(node.type);
+      const config: any = node.data;
+      component.provideImports({ config }).forEach(imp => uniqueImports.add(imp));
+      codeAccumulator += component.generateComponentCode({ config });
+    });
+
+    const importsCode = Array.from(uniqueImports).join('\n');
+    return `${importsCode}\n\n${codeAccumulator}`;
+  }
+
+  static getSparkSessionStopCode(
+    pipelineJson: string,
+    componentService: any
+  ): string {
+    const flow = PipelineService.filterPipeline(pipelineJson);
+    const sparkSessionStopMap = new Map<string, Node>();
+
+    flow.nodes.forEach(node => {
+      const type = componentService.getComponent(node.type)._type;
+      if (type === 'spark_session_stop') {
+        sparkSessionStopMap.set(node.id, node);
+      }
+    });
+
+    if (sparkSessionStopMap.size === 0) {
+      return '';
+    }
+
+    let codeAccumulator = '';
+    sparkSessionStopMap.forEach(node => {
+      const component = componentService.getComponent(node.type);
+      const config: any = node.data;
+      codeAccumulator += component.generateComponentCode({ config });
+    });
+
+    return codeAccumulator;
   }
 
   static getComponentAndDataForNode(

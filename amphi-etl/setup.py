@@ -30,7 +30,7 @@ setup(
     url='https://amphi.ai/',
     license='ELv2',
     install_requires=[ #must be identic to requirements
-        'jupyterlab==4.5.3',
+        'jupyterlab>=4.4.0,<5',
         'jupyterlab-amphi==0.9.5',
         'amphi-scheduler==0.9.5',
         'pandas==2.2.3',

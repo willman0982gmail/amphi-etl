@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 authors = [{ name = "Thibaut Gourdel", email = "tgourdel@amphi.ai" }]
 requires-python = ">=3.8"
 dependencies = [
-    "jupyterlab>=4,<5",
+    "jupyterlab>=4.4.0,<5",
     "apscheduler",
     "sqlalchemy",
 ]

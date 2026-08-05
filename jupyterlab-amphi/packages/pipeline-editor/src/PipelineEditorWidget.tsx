@@ -51,7 +51,7 @@ import ReactFlow, {
 } from 'reactflow';
 import posthog from 'posthog-js'
 
-import { ConfigProvider, Modal, Button, Splitter, Dropdown, Radio } from 'antd';
+import { ConfigProvider, Modal, Button, Dropdown, Radio } from 'antd';
 import { DownOutlined, LoadingOutlined } from '@ant-design/icons';
 
 import { CodeGenerator, CodeGeneratorDagster, PipelineService } from '@amphi/pipeline-components-manager';
@@ -106,6 +106,28 @@ function maskedSensitiveParams(url) {
   } catch (error) {
     // Return original URL if parsing fails
     return url;
+  }
+}
+
+class NodeErrorBoundary extends React.Component<
+  { fallback: React.ReactNode; nodeType: string; children?: React.ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error(`[Amphi] Failed to render component UI for "${this.props.nodeType}"`, error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
   }
 }
 
@@ -230,11 +252,25 @@ const PipelineWrapper: React.FC<IProps> = ({
           const id = component._id;
           const HasCustomUI = !!component && typeof component.UIComponent === 'function';
 
-          // Safe wrapper: use component.UIComponent if present, otherwise a minimal fallback node
+          // Safe wrapper: use component.UIComponent if present, otherwise a minimal fallback node.
+          // Isolate node UI failures so one bad node does not blank the whole canvas/sidebar.
           const NodeRenderer: React.FC<any> = (props) => {
-            if (HasCustomUI) {
-              const UI = component.UIComponent as React.FC<any>;
-              return (
+            const fallback = (
+              <div className="component component--fallback" style={{ padding: 8, borderRadius: 8, border: '1px solid #ddd', background: '#fff' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <InlineIcon icon={component._icon} height="20px" width="20px" />
+                  <span style={{ fontWeight: 500 }}>{component._name ?? id}</span>
+                </div>
+              </div>
+            );
+
+            if (!HasCustomUI) {
+              return fallback;
+            }
+
+            const UI = component.UIComponent as React.FC<any>;
+            return (
+              <NodeErrorBoundary nodeType={id} fallback={fallback}>
                 <UI
                   context={context}
                   componentService={componentService}
@@ -244,18 +280,7 @@ const PipelineWrapper: React.FC<IProps> = ({
                   settings={settings}
                   {...props}
                 />
-              );
-            }
-
-            // Fallback node: no JSX from the blob needed; avoids invalid element type
-            return (
-              <div className="component component--fallback" style={{ padding: 8, borderRadius: 8, border: '1px solid #ddd', background: '#fff' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <InlineIcon icon={component._icon} height="20px" width="20px" />
-                  <span style={{ fontWeight: 500 }}>{component._name ?? id}</span>
-                </div>
-                {/* Render nothing else; ReactFlow provides handles via props if needed */}
-              </div>
+              </NodeErrorBoundary>
             );
           };
 
@@ -484,12 +509,18 @@ const PipelineWrapper: React.FC<IProps> = ({
 
       if ((sourceCategory === "pandas_df_to_documents_processor")) {
         return targetCategory.startsWith("documents");
+      } else if (sourceCategory === "spark_df_to_pandas_processor") {
+        return targetCategory.startsWith("pandas_df");
+      } else if (sourceCategory === "pandas_df_to_spark_processor") {
+        return targetCategory.startsWith("spark_df");
       } else if (sourceCategory.startsWith("documents")) {
         return targetCategory.startsWith("documents");
       } else if (sourceCategory.startsWith("pandas_df")) {
         return targetCategory.startsWith("pandas_df");
       } else if (sourceCategory.startsWith("ibis_df")) {
         return targetCategory.startsWith("ibis_df");
+      } else if (sourceCategory.startsWith("spark_df")) {
+        return targetCategory.startsWith("spark_df");
       } else {
         return false;
       }
@@ -793,17 +824,28 @@ const PipelineWrapper: React.FC<IProps> = ({
               </div>
             </div>
           ) : (
-            <Splitter>
-              <Splitter.Panel min="50%">
+            // Keep canvas + sidebar as flex siblings so CSS (.canvas/.sidebar) applies.
+            // Ant Design Splitter often collapses the right panel when height is not explicit.
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                height: '100%',
+                width: '100%',
+                minHeight: 0,
+                minWidth: 0,
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0, height: '100%', position: 'relative' }}>
                 <PipelineFlow context={context} />
-              </Splitter.Panel>
-              <Splitter.Panel collapsible defaultSize={327} min={241}>
+              </div>
+              <div style={{ width: 327, minWidth: 241, maxWidth: 420, height: '100%', flexShrink: 0 }}>
                 <Sidebar
                   componentService={componentService}
                   onRefreshed={handleComponentsRefresh}
                 />
-              </Splitter.Panel>
-            </Splitter>
+              </div>
+            </div>
           )}
         </ReactFlowProvider>
       </ConfigProvider>

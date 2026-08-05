@@ -55,31 +55,31 @@
     "@amphi/pipeline-components-manager": "^0.9.5",
     "@dagrejs/dagre": "^1.0.4",
     "@jupyter-widgets/jupyterlab-manager": "3.1.9",
-    "@jupyterlab/application": "^4.2.2",
-    "@jupyterlab/apputils": "^4.1.9",
-    "@jupyterlab/docmanager-extension": "^4.2.2",
-    "@jupyterlab/filebrowser": "^4.2.2",
-    "@jupyterlab/launcher": "^4.2.2",
-    "@jupyterlab/logconsole": "^4.2.2",
-    "@jupyterlab/mainmenu": "^4.2.2",
-    "@jupyterlab/services": "~7.4.5",
-    "@jupyterlab/settingregistry": "^4.2.2",
-    "@jupyterlab/ui-components": "^4.2.2",
+    "@jupyterlab/application": "^4.4.0",
+    "@jupyterlab/apputils": "^4.5.0",
+    "@jupyterlab/docmanager-extension": "^4.4.0",
+    "@jupyterlab/filebrowser": "^4.4.0",
+    "@jupyterlab/launcher": "^4.4.0",
+    "@jupyterlab/logconsole": "^4.4.0",
+    "@jupyterlab/mainmenu": "^4.4.0",
+    "@jupyterlab/services": "^7.4.0",
+    "@jupyterlab/settingregistry": "^4.4.0",
+    "@jupyterlab/ui-components": "^4.4.0",
     "@lumino/dragdrop": "^2.0.0",
     "antd": "5.24.4",
     "html-to-image": "^1.11.11",
     "posthog-js": "^1.280.1",
-    "reactflow": "^11.11.4"
+    "reactflow": "11.11.4"
   },
   "resolutions": {
     "@lumino/widgets": "^2.0.0",
     "@types/react": "^18.2.7",
-    "@jupyterlab/services": "^7.4.5",
-    "@jupyterlab/rendermime-interfaces": "^4.1.5",
+    "@jupyterlab/services": "^7.4.0",
+    "@jupyterlab/rendermime-interfaces": "^3.12.0",
     "@amphi/pipeline-components-manager": "file:./../pipeline-components-manager"
   },
   "devDependencies": {
-    "@jupyterlab/builder": "^4.1.5",
+    "@jupyterlab/builder": "^4.4.0",
     "@types/json-schema": "^7.0.11",
     "@types/node": "^20.7.0",
     "@types/react": "^18.0.26",
@@ -104,6 +104,17 @@
       },
       "@amphi/pipeline-editor": {
         "bundled": false,
+        "singleton": true
+      },
+      "react": {
+        "bundled": false,
+        "singleton": true
+      },
+      "react-dom": {
+        "bundled": false,
+        "singleton": true
+      },
+      "reactflow": {
         "singleton": true
       }
     }

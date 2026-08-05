@@ -1,3 +1,5 @@
-jupyterlab==4.4.7
-jupyterlab-amphi==0.5.28
+# Compatible with JupyterLab 4.4.x / 4.5.x / 4.6.x when building from this repo.
+# Prefer installing local packages: ./jupyterlab-amphi and ./amphi-scheduler.
+jupyterlab>=4.4.0,<5
+jupyterlab-amphi>=0.9.5
 .

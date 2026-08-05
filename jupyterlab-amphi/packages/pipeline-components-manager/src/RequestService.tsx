@@ -431,6 +431,166 @@ print(formatted_output)
     };
   };
 
+  /**
+   * S10.4 — list Spark tables via Connect (SHOW TABLES / custom query).
+   * Prints a comma-separated list of table names for the select dropdown.
+   */
+  static retrieveSparkTableList(
+    event: React.MouseEvent<HTMLElement>,
+    catalogName: string,
+    schemaName: string,
+    query: string | undefined,
+    context: any,
+    componentService: any,
+    setList: any,
+    setLoadings: any,
+    nodeId: any
+  ): any {
+    setLoadings(true);
+
+    const catalog = (catalogName || '').trim();
+    const schema = (schemaName || '').trim();
+
+    let discoverySql = (query || '').trim();
+    if (!discoverySql) {
+      if (catalog && schema) {
+        discoverySql = `SHOW TABLES IN \`${catalog}\`.\`${schema}\``;
+      } else if (schema) {
+        discoverySql = `SHOW TABLES IN \`${schema}\``;
+      } else {
+        discoverySql = 'SHOW TABLES';
+      }
+    } else {
+      const catIdent = catalog.replace(/`/g, '');
+      const schIdent = (schema || 'default').replace(/`/g, '');
+      discoverySql = discoverySql
+        .replace(/\{\{tsCFinputCatalog\}\}/g, catIdent)
+        .replace(/\{\{tsCFinputSchema\}\}/g, schIdent);
+      // If query is SHOW NAMESPACES and catalog set, scope it
+      if (
+        /^SHOW\s+NAMESPACES\s*$/i.test(discoverySql.trim()) &&
+        catalog
+      ) {
+        discoverySql = `SHOW NAMESPACES IN \`${catIdent}\``;
+      }
+    }
+
+    const escapedQuery = discoverySql.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+    const envVariableCode = CodeGenerator.getEnvironmentVariableCode(
+      context.model.toString(),
+      componentService
+    );
+    const connectionCode = CodeGenerator.getConnectionCode(
+      context.model.toString(),
+      componentService
+    );
+    const sparkSessionCode = CodeGenerator.getSparkSessionCode(
+      context.model.toString(),
+      componentService
+    );
+
+    const { component, data } = CodeGenerator.getComponentAndDataForNode(
+      nodeId,
+      componentService,
+      context.model.toString()
+    );
+
+    if (!component) {
+      console.error('Component or data not found.');
+      setLoadings(false);
+      return;
+    }
+
+    const dependencies =
+      typeof component.provideDependencies === 'function'
+        ? component.provideDependencies({ config: data })
+        : ['pyspark[connect]'];
+    const imports =
+      typeof component.provideImports === 'function'
+        ? component.provideImports({ config: data })
+        : ['from pyspark.sql import SparkSession', 'import os'];
+
+    const dependencyString = dependencies.join(' ');
+    const importStatements = imports.join('\n');
+
+    const hasSession =
+      sparkSessionCode &&
+      !String(sparkSessionCode).includes('No Spark Connect Session');
+
+    const probe =
+      typeof component.generateSparkConnectProbeCode === 'function'
+        ? component.generateSparkConnectProbeCode({ config: data })
+        : `
+_spark_url = os.getenv("SPARK_CONNECT_URL") or os.getenv("SPARK_REMOTE", "sc://localhost:15002")
+spark = SparkSession.builder.appName("amphi-spark-table-list").remote(_spark_url).getOrCreate()
+`;
+
+    const finalSession = hasSession ? sparkSessionCode : probe;
+
+    let code = `
+!pip install --quiet ${dependencyString} --disable-pip-version-check
+${importStatements}
+${envVariableCode}
+${connectionCode}
+${finalSession}
+
+_query = """
+${escapedQuery}
+"""
+_tables = spark.sql(_query).toPandas()
+_col = None
+for _c in ("tableName", "table_name", "namespace", "catalog", "name"):
+    if _c in _tables.columns:
+        _col = _c
+        break
+if _col is None:
+    _col = _tables.columns[-1] if len(_tables.columns) else None
+if _col is None:
+    print("")
+else:
+    _names = [str(x).strip() for x in _tables[_col].tolist() if str(x).strip()]
+    print(", ".join(_names))
+`;
+
+    code = CodeGenerator.formatVariables(code);
+
+    const future = context.sessionContext.session.kernel!.requestExecute({
+      code
+    });
+
+    future.onReply = reply => {
+      if (reply.content.status !== 'ok') {
+        setLoadings(false);
+      }
+    };
+
+    future.onIOPub = msg => {
+      if (msg.header.msg_type === 'stream') {
+        const streamMsg = msg as KernelMessage.IStreamMsg;
+        if (streamMsg.content.name === 'stdout') {
+          const output = streamMsg.content.text;
+          const itemsArray = output
+            .split(',')
+            .map((item: string) => item.trim())
+            .filter(Boolean);
+          const newItems = itemsArray.map((item: string) => ({
+            value: item,
+            label: item,
+            type: 'table',
+            named: true,
+            key: item
+          }));
+          setList(newItems);
+          setLoadings(false);
+        }
+      } else if (msg.header.msg_type === 'error') {
+        console.error('Spark table list error', msg);
+        setLoadings(false);
+      }
+    };
+  }
+
   static retrieveTableColumns(
     event: React.MouseEvent<HTMLElement>,
     schemaName: string,

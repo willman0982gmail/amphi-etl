@@ -90,6 +90,10 @@ import jsonToTOONIconSvgStr from '../style/icons/toon-logo.svg';
 import toonToolsIconSvgStr from '../style/icons/toon-logo.svg';
 import concatenateColumnsIconSvgStr from '../style/icons/concatenate-columns.svg';
 import packagesActionIconSvgStr from '../style/icons/packages.svg';
+import sparkSqlInputIconSvgStr from '../style/icons/spark-sql-input.svg';
+import sparkSessionIconSvgStr from '../style/icons/spark-session.svg';
+import sparkBridgeIconSvgStr from '../style/icons/spark-bridge.svg';
+import sparkTransformIconSvgStr from '../style/icons/spark-transform.svg';
 
 
 export const mongodbIcon = new LabIcon({
@@ -543,4 +547,24 @@ export const concatenateColumnsIcon = new LabIcon({
 export const packagesActionIcon = new LabIcon({
   name: 'amphi:packages-action',
   svgstr: packagesActionIconSvgStr
+});
+
+export const sparkSqlInputIcon = new LabIcon({
+  name: 'amphi:spark-sql-input-icon',
+  svgstr: sparkSqlInputIconSvgStr
+});
+
+export const sparkSessionIcon = new LabIcon({
+  name: 'amphi:spark-session-icon',
+  svgstr: sparkSessionIconSvgStr
+});
+
+export const sparkBridgeIcon = new LabIcon({
+  name: 'amphi:spark-bridge-icon',
+  svgstr: sparkBridgeIconSvgStr
+});
+
+export const sparkTransformIcon = new LabIcon({
+  name: 'amphi:spark-transform-icon',
+  svgstr: sparkTransformIconSvgStr
 });

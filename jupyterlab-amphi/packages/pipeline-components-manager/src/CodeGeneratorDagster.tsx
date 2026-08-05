@@ -30,6 +30,10 @@ export class CodeGeneratorDagster extends BaseCodeGenerator {
 
     const envVariablesCode = this.getEnvironmentVariableCode(pipelineJson, componentService);
     const connectionsCode = this.getConnectionCode(pipelineJson, componentService);
+    const sparkSessionCode = this.getSparkSessionCode(pipelineJson, componentService);
+    const sparkSessionStopCode = this.getSparkSessionStopCode(pipelineJson, componentService);
+
+    const hasSparkSession = !sparkSessionCode.includes('No Spark Connect Session');
 
     const opDefinitions: string[] = [];
     const uniqueImports = new Set<string>();
@@ -40,7 +44,10 @@ export class CodeGeneratorDagster extends BaseCodeGenerator {
     for (const nodeId of nodesToTraverse) {
       const node = nodesMap.get(nodeId);
       if (!node) continue;
-      const config: any = node.data;
+      const config: any = {
+        ...node.data,
+        ...(hasSparkSession ? { _amphiHasSparkSession: true } : {})
+      };
       const component = componentService.getComponent(node.type);
       component.provideImports({ config }).forEach(imp => uniqueImports.add(imp));
       if (typeof component.provideDependencies === 'function') {
@@ -56,7 +63,10 @@ export class CodeGeneratorDagster extends BaseCodeGenerator {
       const node = nodesMap.get(nodeId);
       if (!node) continue;
 
-      const config: any = node.data;
+      const config: any = {
+        ...node.data,
+        ...(hasSparkSession ? { _amphiHasSparkSession: true } : {})
+      };
       const component = componentService.getComponent(node.type);
       const componentType = component._type;
       let opName = this.generateReadableName(config.customTitle || node.type);
@@ -66,7 +76,20 @@ export class CodeGeneratorDagster extends BaseCodeGenerator {
       let opCode = '';
 
       // Very naive logic (expand as needed)
-      if (/processor/.test(componentType) || componentType.includes('to_documents')) {
+      if (
+        componentType === 'spark_df_double_processor' ||
+        componentType === 'pandas_df_double_processor' ||
+        componentType === 'ibis_df_double_processor'
+      ) {
+        opInputs.push('input_data1', 'input_data2');
+        opOutputs.push('result');
+        opCode = component.generateComponentCode({
+          config,
+          inputName1: 'input_data1',
+          inputName2: 'input_data2',
+          outputName: 'result'
+        });
+      } else if (/processor/.test(componentType) || componentType.includes('to_documents')) {
         opInputs.push('input_data');
         opOutputs.push('result');
         const originalCode = component.generateComponentCode({
@@ -126,9 +149,12 @@ def ${opName}(${opInputs.join(', ')}):
       envVariablesCode,
       '\n',
       connectionsCode,
+      '\n',
+      sparkSessionCode,
       ...Array.from(uniqueFunctions),
       ...opDefinitions,
-      jobDefinition
+      jobDefinition,
+      sparkSessionStopCode
     ].join('');
 
     return this.formatVariables(dagsterCode);

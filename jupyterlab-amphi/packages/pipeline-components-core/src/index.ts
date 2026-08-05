@@ -15,7 +15,8 @@ import {
   DataCleansing, GenerateIDColumn, SqlServerInput, OracleInput, Connection, SnowflakeInput, FormulaRow, InlineInput, S3FileOutput, S3FileInput,
   SnowflakeOutput, SqlServerOutput, OracleOutput, CustomInput, CustomOutput, FileUtils, FrequencyAnalysis, FormExample, UniqueKeyDetector, FileAction, DataframeList, DataframeDelete, HierarchyPath, PackagesList, JSONTools,
   DatabaseInput, DatabaseOutput, CompareDataframes, GenerateCalendar, DynamicGenerateCalendar, CorrelationMatrix,
-  Switch, AutoColumnPosition, ChartGenerator, ComponentsList, MarkdownTools, TableToMarkdown, InternalRepositoryConnector, TOONTools, JSONToTOON, CreateJSONfromTable, ConcatenateColumns, AddMarkdownStyle, ValidateMarkdown,PackagesAction
+  Switch, AutoColumnPosition, ChartGenerator, ComponentsList, MarkdownTools, TableToMarkdown, InternalRepositoryConnector, TOONTools, JSONToTOON, CreateJSONfromTable, ConcatenateColumns, AddMarkdownStyle, ValidateMarkdown,PackagesAction,
+  SparkSqlInput, SparkConnectSession, SparkSqlNativeInput, SparkFileInput, SparkSqlTransform, SparkParquetOutput, SparkToPandas, SparkTableOutput, PandasToSpark, SparkSessionStop, SparkLimit, SparkDropDuplicates, SparkSelectColumns, SparkFilter, SparkOrderBy, SparkRepartition, SparkSample, SparkWithColumn, SparkCache, SparkDropColumns, SparkDistinct, SparkUnion, SparkJoin, SparkAggregate, SparkRenameColumns, SparkFillNa, SparkCast, SparkExplode, SparkWindow, SparkPivot, SparkUnpivot, SparkConcatColumns, SparkGenerateId, SparkCoalesce, SparkWhen, SparkStringReplace, SparkTrim, SparkSubstring, SparkDateTrunc, SparkSetOp, SparkDateFormat, SparkArrayOps, SparkCaseFold, SparkRound, SparkHash, SparkDateAdd, SparkLength, SparkSplit, SparkAbs, SparkGreatest, SparkDateDiff, SparkUnixTime, SparkMath, SparkInstr, SparkReverseRepeat, SparkIsNull, SparkStructGet, SparkApproxCountDistinct, SparkDescribe, SparkCheckpoint
 } from './components';
 
 // Export allow the component to be used as a base component in different packages. Order does not matter.
@@ -26,7 +27,8 @@ export {
   EnvVariables, EnvFile, Transpose, Unite, Pivot, Annotation, ODBCInput, PdfTablesInput, Summary, LocalFileInput, FlattenJSON, ExplodeJSON, ValidateJSON,
   DataCleansing, GenerateIDColumn, SqlServerInput, OracleInput, Connection, SnowflakeInput, FormulaRow, InlineInput, S3FileOutput, S3FileInput,
   SnowflakeOutput, SqlServerOutput, OracleOutput, CustomInput, CustomOutput, FileUtils, FrequencyAnalysis, FormExample, UniqueKeyDetector, FileAction, DataframeList, DataframeDelete, HierarchyPath, PackagesList, CompareDataframes, GenerateCalendar, DynamicGenerateCalendar,
-  Switch, CorrelationMatrix, AutoColumnPosition, ChartGenerator,ComponentsList, MarkdownTools, TableToMarkdown, InternalRepositoryConnector,TOONTools,JSONToTOON,CreateJSONfromTable, ConcatenateColumns, AddMarkdownStyle, ValidateMarkdown,PackagesAction
+  Switch, CorrelationMatrix, AutoColumnPosition, ChartGenerator,ComponentsList, MarkdownTools, TableToMarkdown, InternalRepositoryConnector,TOONTools,JSONToTOON,CreateJSONfromTable, ConcatenateColumns, AddMarkdownStyle, ValidateMarkdown,PackagesAction,
+  SparkSqlInput, SparkConnectSession, SparkSqlNativeInput, SparkFileInput, SparkSqlTransform, SparkParquetOutput, SparkToPandas, SparkTableOutput, PandasToSpark, SparkSessionStop, SparkLimit, SparkDropDuplicates, SparkSelectColumns, SparkFilter, SparkOrderBy, SparkRepartition, SparkSample, SparkWithColumn, SparkCache, SparkDropColumns, SparkDistinct, SparkUnion, SparkJoin, SparkAggregate, SparkRenameColumns, SparkFillNa, SparkCast, SparkExplode, SparkWindow, SparkPivot, SparkUnpivot, SparkConcatColumns, SparkGenerateId, SparkCoalesce, SparkWhen, SparkStringReplace, SparkTrim, SparkSubstring, SparkDateTrunc, SparkSetOp, SparkDateFormat, SparkArrayOps, SparkCaseFold, SparkRound, SparkHash, SparkDateAdd, SparkLength, SparkSplit, SparkAbs, SparkGreatest, SparkDateDiff, SparkUnixTime, SparkMath, SparkInstr, SparkReverseRepeat, SparkIsNull, SparkStructGet, SparkApproxCountDistinct, SparkDescribe, SparkCheckpoint
 }
 
 const plugin: JupyterFrontEndPlugin<void> = {
@@ -55,6 +57,9 @@ const plugin: JupyterFrontEndPlugin<void> = {
     componentService.addComponent(RestInput.getInstance());
     componentService.addComponent(GoogleSheetsInput.getInstance());
     componentService.addComponent(DatabaseInput.getInstance());
+    componentService.addComponent(SparkSqlInput.getInstance());
+    componentService.addComponent(SparkSqlNativeInput.getInstance());
+    componentService.addComponent(SparkFileInput.getInstance());
     componentService.addComponent(CustomInput.getInstance());
     componentService.addComponent(GenerateCalendar.getInstance());
     // componentService.addComponent(PyGWalker.getInstance())
@@ -90,6 +95,59 @@ const plugin: JupyterFrontEndPlugin<void> = {
     componentService.addComponent(DynamicGenerateCalendar.getInstance());
     componentService.addComponent(Switch.getInstance());
     componentService.addComponent(AutoColumnPosition.getInstance());
+    componentService.addComponent(SparkSqlTransform.getInstance());
+    componentService.addComponent(SparkLimit.getInstance());
+    componentService.addComponent(SparkDropDuplicates.getInstance());
+    componentService.addComponent(SparkSelectColumns.getInstance());
+    componentService.addComponent(SparkFilter.getInstance());
+    componentService.addComponent(SparkOrderBy.getInstance());
+    componentService.addComponent(SparkRepartition.getInstance());
+    componentService.addComponent(SparkSample.getInstance());
+    componentService.addComponent(SparkWithColumn.getInstance());
+    componentService.addComponent(SparkCache.getInstance());
+    componentService.addComponent(SparkDropColumns.getInstance());
+    componentService.addComponent(SparkDistinct.getInstance());
+    componentService.addComponent(SparkUnion.getInstance());
+    componentService.addComponent(SparkJoin.getInstance());
+    componentService.addComponent(SparkAggregate.getInstance());
+    componentService.addComponent(SparkRenameColumns.getInstance());
+    componentService.addComponent(SparkFillNa.getInstance());
+    componentService.addComponent(SparkCast.getInstance());
+    componentService.addComponent(SparkExplode.getInstance());
+    componentService.addComponent(SparkWindow.getInstance());
+    componentService.addComponent(SparkPivot.getInstance());
+    componentService.addComponent(SparkUnpivot.getInstance());
+    componentService.addComponent(SparkConcatColumns.getInstance());
+    componentService.addComponent(SparkGenerateId.getInstance());
+    componentService.addComponent(SparkCoalesce.getInstance());
+    componentService.addComponent(SparkWhen.getInstance());
+    componentService.addComponent(SparkStringReplace.getInstance());
+    componentService.addComponent(SparkTrim.getInstance());
+    componentService.addComponent(SparkSubstring.getInstance());
+    componentService.addComponent(SparkDateTrunc.getInstance());
+    componentService.addComponent(SparkSetOp.getInstance());
+    componentService.addComponent(SparkDateFormat.getInstance());
+    componentService.addComponent(SparkArrayOps.getInstance());
+    componentService.addComponent(SparkCaseFold.getInstance());
+    componentService.addComponent(SparkRound.getInstance());
+    componentService.addComponent(SparkHash.getInstance());
+    componentService.addComponent(SparkDateAdd.getInstance());
+    componentService.addComponent(SparkLength.getInstance());
+    componentService.addComponent(SparkSplit.getInstance());
+    componentService.addComponent(SparkAbs.getInstance());
+    componentService.addComponent(SparkGreatest.getInstance());
+    componentService.addComponent(SparkDateDiff.getInstance());
+    componentService.addComponent(SparkUnixTime.getInstance());
+    componentService.addComponent(SparkMath.getInstance());
+    componentService.addComponent(SparkInstr.getInstance());
+    componentService.addComponent(SparkReverseRepeat.getInstance());
+    componentService.addComponent(SparkIsNull.getInstance());
+    componentService.addComponent(SparkStructGet.getInstance());
+    componentService.addComponent(SparkApproxCountDistinct.getInstance());
+    componentService.addComponent(SparkDescribe.getInstance());
+    componentService.addComponent(SparkCheckpoint.getInstance());
+    componentService.addComponent(SparkToPandas.getInstance());
+    componentService.addComponent(PandasToSpark.getInstance());
 
     // Outputs
     componentService.addComponent(CsvFileOutput.getInstance());
@@ -100,6 +158,8 @@ const plugin: JupyterFrontEndPlugin<void> = {
     componentService.addComponent(GoogleSheetsOutput.getInstance());
     componentService.addComponent(S3FileOutput.getInstance());
     componentService.addComponent(DatabaseOutput.getInstance());
+    componentService.addComponent(SparkParquetOutput.getInstance());
+    componentService.addComponent(SparkTableOutput.getInstance());
     componentService.addComponent(Console.getInstance());
     componentService.addComponent(CustomOutput.getInstance());
 	
@@ -114,17 +174,12 @@ const plugin: JupyterFrontEndPlugin<void> = {
     componentService.addComponent(EnvVariables.getInstance());
     componentService.addComponent(EnvFile.getInstance());
     componentService.addComponent(Connection.getInstance());
+    componentService.addComponent(SparkConnectSession.getInstance());
+    componentService.addComponent(SparkSessionStop.getInstance());
 
     // Misc
-
     componentService.addComponent(FileAction.getInstance());
     componentService.addComponent(Annotation.getInstance());
-    componentService.addComponent(Annotation.getInstance());
-	    
-    // Settings
-    componentService.addComponent(EnvVariables.getInstance());
-    componentService.addComponent(EnvFile.getInstance());
-    componentService.addComponent(Connection.getInstance());
 
     // Developer
     componentService.addComponent(FormExample.getInstance());

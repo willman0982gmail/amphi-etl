@@ -1,4 +1,8 @@
-jupyterlab==4.5.8
+# Compatible with JupyterLab 4.4.x / 4.5.x / 4.6.x.
+# Frontend packages declare @jupyterlab/* ^4.4 and @jupyter/ydoc ^3 || ^4
+# so labextension federation matches the host YDoc major.
+jupyterlab>=4.4.0,<5
+notebook>=7.4.0,<8
 pandas==2.2.3
 polars==1.32.2
 duckdb==1.3.2
