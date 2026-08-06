@@ -4,6 +4,8 @@ This document explains how to build Amphi from source code. Amphi consists of tw
 1. `jupyterlab-amphi`: The core JupyterLab extension containing the main application logic
 2. `amphi-etl`: The full Amphi ETL application that builds upon the core extension
 
+> **JupyterLab 4.5.9 + scheduler:** For a complete step-by-step guide to install JupyterLab **4.5.9**, then build, package, and install `jupyterlab-amphi` and `amphi-scheduler` (including wheel packaging), see **[docs/build-install-jupyterlab-4.5.9.md](docs/build-install-jupyterlab-4.5.9.md)**.
+
 ## 👉 Prerequisites 👈
 Python must be installed on your machine.
 Before starting the build process, we strongly recommend setting up a Python virtual environment. This helps avoid conflicts between Python packages and ensures a clean installation. You can create one using either `venv` or `conda`:
