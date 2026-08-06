@@ -14,14 +14,15 @@ This guide covers building both Amphi packages from source, creating distributab
 1. [Prerequisites](#1-prerequisites)
 2. [Create a virtual environment](#2-create-a-virtual-environment)
 3. [Install JupyterLab 4.5.9](#3-install-jupyterlab-459)
-4. [Build and install jupyterlab-amphi](#4-build-and-install-jupyterlab-amphi)
-5. [Build and install amphi-scheduler](#5-build-and-install-amphi-scheduler)
-6. [Package wheels (optional)](#6-package-wheels-optional)
-7. [Install from wheels (offline / deploy)](#7-install-from-wheels-offline--deploy)
-8. [Verify the installation](#8-verify-the-installation)
-9. [Launch JupyterLab](#9-launch-jupyterlab)
-10. [Troubleshooting](#10-troubleshooting)
-11. [Quick reference (copy-paste)](#11-quick-reference-copy-paste)
+4. [Corporate network / npm registry (required behind Artifactory)](#4-corporate-network--npm-registry-required-behind-artifactory)
+5. [Build and install jupyterlab-amphi](#5-build-and-install-jupyterlab-amphi)
+6. [Build and install amphi-scheduler](#6-build-and-install-amphi-scheduler)
+7. [Package wheels (optional)](#7-package-wheels-optional)
+8. [Install from wheels (offline / deploy)](#8-install-from-wheels-offline--deploy)
+9. [Verify the installation](#9-verify-the-installation)
+10. [Launch JupyterLab](#10-launch-jupyterlab)
+11. [Troubleshooting](#11-troubleshooting)
+12. [Quick reference (copy-paste)](#12-quick-reference-copy-paste)
 
 ---
 
@@ -126,11 +127,143 @@ python -m pip install build
 
 ---
 
-## 4. Build and install jupyterlab-amphi
+## 4. Corporate network / npm registry (required behind Artifactory)
+
+### Symptom
+
+`pip install -e .` (or `pip install .`) fails while preparing metadata / building the JupyterLab extension:
+
+```text
+YN0001: RequestError: getaddrinfo ENOTFOUND registry.npmjs.org
+subprocess.CalledProcessError: Command '['jlpm', 'install']' returned non-zero exit status 1
+error: metadata-generation-failed
+```
+
+You may also see:
+
+```text
+INTERNAL ERROR: ... This package doesn't seem to be present in your lockfile; run "yarn install" to update the lockfile
+```
+
+### Root cause
+
+| Tool | Registry used | Typical corporate setup |
+|------|---------------|-------------------------|
+| **pip** | Artifactory PyPI remote (works) | e.g. `https://artifactory.global.standardchartered.com/artifactory/api/pypi/pypi/simple` |
+| **jlpm / Yarn** | Default `https://registry.npmjs.org` (fails) | DNS / firewall blocks public npm |
+
+`hatch-jupyter-builder` runs `jlpm install` during `pip install -e .`. If Yarn cannot reach npm, the Python install fails (or reports success while frontend assets are incomplete — always verify with `jupyter labextension list`).
+
+### Fix A — Point Yarn at the corporate npm Artifactory (preferred)
+
+Ask your platform team for the **npm** (not PyPI) Artifactory repository URL. It often looks like:
+
+```text
+https://artifactory.global.standardchartered.com/artifactory/api/npm/<npm-repo-name>/
+```
+
+Configure **Yarn Berry** (used by `jlpm`) in each package that you build.
+
+**Option 1 — user-level (applies to all projects):**
+
+```bash
+# After jupyterlab is installed so jlpm exists
+jlpm config set npmRegistryServer "https://artifactory.global.standardchartered.com/artifactory/api/npm/<npm-repo-name>/"
+```
+
+**Option 2 — project-level (recommended; do not commit secrets):**
+
+Edit or create `jupyterlab-amphi/.yarnrc.yml` and `amphi-scheduler/.yarnrc.yml`:
+
+```yaml
+nodeLinker: node-modules
+
+# Corporate npm mirror (replace <npm-repo-name> with your Artifactory npm repo)
+npmRegistryServer: "https://artifactory.global.standardchartered.com/artifactory/api/npm/<npm-repo-name>/"
+
+# If Artifactory requires auth, also set (prefer env / yarn npm login — do not commit tokens):
+# npmAuthIdent: "username:password_or_token"
+# npmAlwaysAuth: true
+```
+
+Optional npm-compatible fallback (some tools still read this):
+
+```bash
+# ~/.npmrc or project .npmrc
+registry=https://artifactory.global.standardchartered.com/artifactory/api/npm/<npm-repo-name>/
+```
+
+Authenticate if required:
+
+```bash
+# Interactive login against the mirror
+jlpm npm login --registry "https://artifactory.global.standardchartered.com/artifactory/api/npm/<npm-repo-name>/"
+```
+
+Verify DNS / connectivity:
+
+```bash
+# Should resolve and return HTTP 200/401 (401 still means DNS works)
+curl -I "https://artifactory.global.standardchartered.com/artifactory/api/npm/<npm-repo-name>/"
+
+# This often fails behind the firewall — that is expected until you use Artifactory
+# curl -I https://registry.npmjs.org
+```
+
+### Fix B — HTTP(S) proxy (if Artifactory npm is unavailable but proxy reaches public npm)
+
+```bash
+export HTTP_PROXY="http://<proxy-host>:<port>"
+export HTTPS_PROXY="http://<proxy-host>:<port>"
+export NO_PROXY="localhost,127.0.0.1,.standardchartered.com,artifactory.global.standardchartered.com"
+
+# Yarn Berry also respects:
+export NODE_EXTRA_CA_CERTS="/path/to/corp-root-ca.pem"   # if TLS inspection breaks Node
+```
+
+Then retry `jlpm install`.
+
+### Fix C — Safe build order (avoid relying on pip to fetch npm packages)
+
+Always build frontend assets **before** editable install, with registry/proxy already configured:
+
+```bash
+cd "$REPO_ROOT/jupyterlab-amphi"
+jlpm install          # must succeed against Artifactory or proxy
+jlpm build:prod       # produces amphi/*/static/...
+python -m pip install -e .
+```
+
+If `jlpm install` fails, **do not** continue to `pip install -e .`. A later “Successfully installed jupyterlab-amphi” message can still mean labextensions were not built correctly.
+
+After a failed or partial install, clean and retry:
+
+```bash
+cd "$REPO_ROOT/jupyterlab-amphi"
+rm -rf node_modules .yarn/cache .yarn/install-state.gz
+# keep yarn.lock unless you intentionally refresh it
+jlpm install
+jlpm build:prod
+python -m pip install -e .
+```
+
+### Lockfile warning
+
+```text
+This package doesn't seem to be present in your lockfile; run "yarn install" to update the lockfile
+```
+
+This usually follows a **failed / interrupted** `jlpm install` (network error), not a real permanent lockfile bug. Fix registry access first, then re-run `jlpm install`. Only run `YARN_ENABLE_IMMUTABLE_INSTALLS=false jlpm install` if you intentionally need to refresh `yarn.lock`.
+
+---
+
+## 5. Build and install jupyterlab-amphi
 
 `jupyterlab-amphi` is the foundation (pipeline editor, components, console, metadata panel). Install it **before** `amphi-scheduler`.
 
-### 4.1 Development / editable install (recommended for local work)
+> Complete [§4 Corporate network / npm registry](#4-corporate-network--npm-registry-required-behind-artifactory) first if `registry.npmjs.org` is blocked.
+
+### 5.1 Development / editable install (recommended for local work)
 
 ```bash
 cd "$REPO_ROOT/jupyterlab-amphi"
@@ -138,7 +271,7 @@ cd "$REPO_ROOT/jupyterlab-amphi"
 # Install Python runtime deps declared by the package
 python -m pip install -r requirements.txt
 
-# Install JS workspace deps and build production assets
+# Install JS workspace deps and build production assets (must succeed)
 jlpm install
 jlpm build:prod
 
@@ -151,8 +284,9 @@ Notes:
 - `requirements.txt` includes `jupyterlab>=4.4.0,<5` and a trailing `.` (local package). With JupyterLab 4.5.9 already pinned, pip keeps that version.
 - `jlpm build:prod` runs Lerna production builds for all packages under `packages/`.
 - Editable install (`-e .`) links the package so later rebuilds are picked up after you re-run `jlpm build:prod` and restart Lab.
+- `pip install -e .` may invoke `jlpm` again via `hatch-jupyter-builder`; keep the npm registry configured so that step does not fail.
 
-### 4.2 Non-editable (regular) install
+### 5.2 Non-editable (regular) install
 
 ```bash
 cd "$REPO_ROOT/jupyterlab-amphi"
@@ -161,7 +295,7 @@ jlpm build:prod
 python -m pip install .
 ```
 
-### 4.3 What gets installed
+### 5.3 What gets installed
 
 | Layer | Content |
 |-------|---------|
@@ -170,11 +304,11 @@ python -m pip install .
 
 ---
 
-## 5. Build and install amphi-scheduler
+## 6. Build and install amphi-scheduler
 
 `amphi-scheduler` depends on JupyterLab and on `jupyterlab-amphi` for `.ampln` code generation (`pipeline-editor:generate-code`).
 
-### 5.1 Development / editable install
+### 6.1 Development / editable install
 
 ```bash
 cd "$REPO_ROOT/amphi-scheduler"
@@ -189,7 +323,7 @@ python -m pip install -e .
 
 Python dependencies pulled in by the package include **APScheduler** and **SQLAlchemy** (declared in `pyproject.toml`).
 
-### 5.2 Non-editable install
+### 6.2 Non-editable install
 
 ```bash
 cd "$REPO_ROOT/amphi-scheduler"
@@ -198,7 +332,7 @@ jlpm build:prod
 python -m pip install .
 ```
 
-### 5.3 What gets installed
+### 6.3 What gets installed
 
 | Layer | Content |
 |-------|---------|
@@ -208,11 +342,11 @@ python -m pip install .
 
 ---
 
-## 6. Package wheels (optional)
+## 7. Package wheels (optional)
 
 Use this when you need artifacts to copy to another machine, archive a release, or install without rebuilding TypeScript on the target host.
 
-### 6.1 Package jupyterlab-amphi
+### 7.1 Package jupyterlab-amphi
 
 ```bash
 cd "$REPO_ROOT/jupyterlab-amphi"
@@ -232,7 +366,7 @@ jupyterlab-amphi/dist/jupyterlab_amphi-<version>-py3-none-any.whl
 jupyterlab-amphi/dist/jupyterlab_amphi-<version>.tar.gz
 ```
 
-### 6.2 Package amphi-scheduler
+### 7.2 Package amphi-scheduler
 
 ```bash
 cd "$REPO_ROOT/amphi-scheduler"
@@ -249,7 +383,7 @@ amphi-scheduler/dist/amphi_scheduler-<version>-py3-none-any.whl
 amphi-scheduler/dist/amphi_scheduler-<version>.tar.gz
 ```
 
-### 6.3 Collect artifacts (optional)
+### 7.3 Collect artifacts (optional)
 
 ```bash
 mkdir -p "$REPO_ROOT/dist-packages"
@@ -261,7 +395,7 @@ These steps mirror the CI flow in `.github/workflows/pypi-publish.yml` (`jlpm in
 
 ---
 
-## 7. Install from wheels (offline / deploy)
+## 8. Install from wheels (offline / deploy)
 
 On a machine that already has JupyterLab 4.5.9 (or install it first):
 
@@ -280,11 +414,12 @@ Or from a directory of wheels:
 python -m pip install --no-index --find-links="$REPO_ROOT/dist-packages" jupyterlab-amphi amphi-scheduler
 ```
 
-> Prefer wheels built against the same JupyterLab major/minor you run in production (here: 4.5.9).
+> Prefer wheels built against the same JupyterLab major/minor you run in production (here: 4.5.9).  
+> Wheel install does **not** need npm access on the target host (frontend assets are already inside the wheel).
 
 ---
 
-## 8. Verify the installation
+## 9. Verify the installation
 
 ```bash
 # Package versions
@@ -311,9 +446,12 @@ python -m jupyter server extension enable jupyterlab_git --sys-prefix
 python -m jupyter server extension enable jupyter_lsp --sys-prefix
 ```
 
+
+
+
 ---
 
-## 9. Launch JupyterLab
+## 10. Launch JupyterLab
 
 ```bash
 # Replace with your workspace (pipelines, data files)
@@ -336,19 +474,53 @@ Clear the browser cache if extensions were reinstalled and the UI looks stale.
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 | Issue | What to do |
 |-------|------------|
+| `ENOTFOUND registry.npmjs.org` / `jlpm install` fails | pip uses Artifactory; Yarn still hits public npm. Configure corporate npm registry or proxy — see [§4](#4-corporate-network--npm-registry-required-behind-artifactory). |
+| `metadata-generation-failed` / `Command '['jlpm', 'install']'` | Same as above: hatch runs `jlpm` during `pip install -e .`. Fix Yarn registry, then pre-run `jlpm install && jlpm build:prod` before pip. |
+| `Successfully installed` but Lab extension missing/broken | Treat as failed build. Re-run `jlpm build:prod`, reinstall, then `jupyter labextension list --verbose`. |
+| Lockfile / workspace INTERNAL ERROR | Usually a cascade from failed `jlpm install`. Fix network, remove `node_modules`, re-run `jlpm install`. |
 | `jlpm: command not found` | Install JupyterLab first (`pip install jupyterlab==4.5.9`), then retry. |
 | Extension “not compatible” / `@jupyterlab/services` conflict | Rebuild from this repo (do not use older PyPI wheels on JL 4.5.9). |
 | Scheduler panel missing | Confirm `amphi-scheduler` is installed and `pipeline_scheduler` is listed under `jupyter server extension list`. |
-| Build fails in `node_modules` | Delete `node_modules` and lock-related caches, then `jlpm install` again. Use Node 18/20. |
+| Build fails in `node_modules` | Delete `node_modules` and Yarn install state, then `jlpm install` again. Use Node 18/20. |
 | Wrong Python packages | Ensure the venv is activated (`which python` / `where python`). |
 | Editable install not updating UI | Re-run `jlpm build:prod`, restart JupyterLab, hard-refresh the browser. |
 | Mixing Elyra + Amphi | Both may register a conflicting document factory; see [examples/README.md](../examples/README.md) (Amphi + Elyra section). Prefer separate environments. |
+| TLS / corporate CA errors from Node | Set `NODE_EXTRA_CA_CERTS` to your corp root CA PEM path. |
 
-Clean rebuild for one package:
+### Recover from the Artifactory / npm DNS failure
+
+```bash
+# 1) Configure Yarn (example — replace with your real npm Artifactory URL)
+cd "$REPO_ROOT/jupyterlab-amphi"
+# edit .yarnrc.yml → set npmRegistryServer, or:
+jlpm config set npmRegistryServer "https://artifactory.global.standardchartered.com/artifactory/api/npm/<npm-repo-name>/"
+
+# 2) Clean partial Yarn state
+rm -rf node_modules .yarn/cache .yarn/install-state.gz
+
+# 3) Install + build JS first (must succeed)
+jlpm install
+jlpm build:prod
+
+# 4) Then Python editable install
+python -m pip install -e .
+
+# 5) Repeat for scheduler
+cd "$REPO_ROOT/amphi-scheduler"
+# same npmRegistryServer in .yarnrc.yml
+rm -rf node_modules .yarn/cache .yarn/install-state.gz
+jlpm install && jlpm build:prod
+python -m pip install -e .
+
+# 6) Verify
+python -m jupyter labextension list --verbose
+```
+
+Clean rebuild for one package (when registry already works):
 
 ```bash
 cd "$REPO_ROOT/jupyterlab-amphi"   # or amphi-scheduler
@@ -361,7 +533,7 @@ python -m pip install -e .
 
 ---
 
-## 11. Quick reference (copy-paste)
+## 12. Quick reference (copy-paste)
 
 End-to-end setup on macOS/Linux with JupyterLab **4.5.9**:
 
@@ -375,10 +547,16 @@ python -m pip install --upgrade pip setuptools wheel build
 # 1) JupyterLab 4.5.9
 python -m pip install 'jupyterlab==4.5.9'
 
+# 1b) Corporate npm (REQUIRED if registry.npmjs.org is blocked)
+# Replace <npm-repo-name> with your Artifactory npm repository
+export NPM_MIRROR="https://artifactory.global.standardchartered.com/artifactory/api/npm/<npm-repo-name>/"
+# Write into both packages' .yarnrc.yml, or:
+#   jlpm config set npmRegistryServer "$NPM_MIRROR"
+
 # 2) jupyterlab-amphi
 cd jupyterlab-amphi
 python -m pip install -r requirements.txt
-jlpm install && jlpm build:prod
+jlpm install && jlpm build:prod   # must succeed before pip
 python -m pip install -e .
 
 # 3) amphi-scheduler
@@ -406,7 +584,7 @@ python -m pip install 'jupyterlab==4.5.9' build
 cd jupyterlab-amphi && jlpm install && jlpm build:prod && python -m build
 cd ../amphi-scheduler && jlpm install && jlpm build:prod && python -m build
 
-# Later / elsewhere:
+# Later / elsewhere (no npm needed on target):
 python -m pip install jupyterlab-amphi/dist/*.whl
 python -m pip install amphi-scheduler/dist/*.whl
 ```
@@ -430,10 +608,12 @@ python -m pip install amphi-scheduler/dist/*.whl
 ```text
 1. Create & activate venv
 2. pip install jupyterlab==4.5.9
-3. Build + install jupyterlab-amphi
-4. Build + install amphi-scheduler
-5. Verify labextensions / server extensions
-6. Launch JupyterLab
+3. Configure Yarn npmRegistryServer (corporate Artifactory) if public npm is blocked
+4. jlpm install && jlpm build:prod && pip install -e .   # jupyterlab-amphi
+5. jlpm install && jlpm build:prod && pip install -e .   # amphi-scheduler
+6. Verify labextensions / server extensions
+7. Launch JupyterLab
 ```
 
-Do not reverse steps 3 and 4: the scheduler expects the Amphi pipeline editor for `.ampln` scheduling.
+Do not reverse steps 4 and 5: the scheduler expects the Amphi pipeline editor for `.ampln` scheduling.  
+Do not run `pip install -e .` until `jlpm install` succeeds against your npm mirror.

@@ -135,6 +135,7 @@ If you encounter any issues:
 2. Verify all prerequisites are installed correctly
 3. Check that paths in commands match your system's directory structure
 4. Make sure you're using compatible versions of Python and JupyterLab
+5. **Corporate network / Artifactory:** If `jlpm install` fails with `ENOTFOUND registry.npmjs.org` while pip works via Artifactory, configure Yarn's `npmRegistryServer` to your corporate **npm** mirror (not the PyPI URL). See [docs/build-install-jupyterlab-4.5.9.md §4](docs/build-install-jupyterlab-4.5.9.md#4-corporate-network--npm-registry-required-behind-artifactory). Always run `jlpm install && jlpm build:prod` successfully **before** `pip install -e .`.
 
 ## 🗈 Notes 🗈
 
