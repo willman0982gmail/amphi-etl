@@ -5,3 +5,6 @@
 .jupyter_ystore.db
 .venv
 .history
+.vscode
+.amphi
+**/.yarnrc.yml
