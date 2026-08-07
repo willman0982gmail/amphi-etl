@@ -7,6 +7,29 @@ This guide covers building both Amphi packages from source, creating distributab
 > **Why build from source?**  
 > Published PyPI wheels (e.g. `jupyterlab-amphi==0.9.7`) pin older `@jupyterlab/services` ranges and may show compatibility warnings on JupyterLab 4.5.x. Building from this repo against JupyterLab 4.5.9 produces matching labextensions. See [examples/README.md](../examples/README.md) for the full compatibility matrix.
 
+### Automated script
+
+Use the helper script to create `.venv`, install JupyterLab **4.5.9**, build/install `jupyterlab-amphi` + `amphi-scheduler`, and start Lab:
+
+```bash
+# From repository root
+./scripts/build-install-jupyterlab-4.5.9.sh
+
+# Build only (no JupyterLab process)
+./scripts/build-install-jupyterlab-4.5.9.sh --no-start
+
+# Use current Python env instead of ./.venv
+./scripts/build-install-jupyterlab-4.5.9.sh --no-venv
+
+# Corporate npm Artifactory mirror
+./scripts/build-install-jupyterlab-4.5.9.sh --npm-registry "https://artifactory.example/artifactory/api/npm/<repo>/"
+
+# Custom workspace / port
+./scripts/build-install-jupyterlab-4.5.9.sh --notebook-dir "$HOME/workspace" --port 8889
+```
+
+The script prefers **`jlpm`**, falling back to **`npm`** for `install` and `run build:prod`. Run `./scripts/build-install-jupyterlab-4.5.9.sh --help` for all options.
+
 ---
 
 ## Table of contents
@@ -57,14 +80,14 @@ In the commands below, `REPO_ROOT` is the absolute path to this repository (the 
 
 ## 2. Create a virtual environment
 
-Keep the venv activated for every subsequent step.
+Keep the virtual environment active throughout the build. The helper script uses **`.venv`** at the repo root (already listed in `.gitignore`).
 
 ### macOS / Linux
 
 ```bash
 cd /path/to/amphi-etl   # REPO_ROOT
-python3 -m venv amphi_venv
-source amphi_venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 python -m pip install --upgrade pip setuptools wheel
 ```
 
@@ -72,8 +95,8 @@ python -m pip install --upgrade pip setuptools wheel
 
 ```powershell
 cd C:\path\to\amphi-etl
-python -m venv amphi_venv
-.\amphi_venv\Scripts\Activate.ps1
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip setuptools wheel
 ```
 
@@ -400,7 +423,7 @@ These steps mirror the CI flow in `.github/workflows/pypi-publish.yml` (`jlpm in
 On a machine that already has JupyterLab 4.5.9 (or install it first):
 
 ```bash
-source /path/to/amphi_venv/bin/activate
+source /path/to/amphi-etl/.venv/bin/activate
 python -m pip install 'jupyterlab==4.5.9'
 
 # Install in dependency order
@@ -535,13 +558,21 @@ python -m pip install -e .
 
 ## 12. Quick reference (copy-paste)
 
-End-to-end setup on macOS/Linux with JupyterLab **4.5.9**:
+**Preferred (script):**
+
+```bash
+cd /path/to/amphi-etl
+./scripts/build-install-jupyterlab-4.5.9.sh
+# or: ./scripts/build-install-jupyterlab-4.5.9.sh --no-start
+```
+
+End-to-end setup on macOS/Linux with JupyterLab **4.5.9** (manual):
 
 ```bash
 # 0) Repo + venv
 cd /path/to/amphi-etl
-python3 -m venv amphi_venv
-source amphi_venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 python -m pip install --upgrade pip setuptools wheel build
 
 # 1) JupyterLab 4.5.9
@@ -578,7 +609,7 @@ jupyter lab --notebook-dir="$HOME/workspace" --ContentManager.allow_hidden=True
 
 ```bash
 cd /path/to/amphi-etl
-source amphi_venv/bin/activate
+source .venv/bin/activate
 python -m pip install 'jupyterlab==4.5.9' build
 
 cd jupyterlab-amphi && jlpm install && jlpm build:prod && python -m build
@@ -595,6 +626,7 @@ python -m pip install amphi-scheduler/dist/*.whl
 
 | Document | Description |
 |----------|-------------|
+| [scripts/build-install-jupyterlab-4.5.9.sh](../scripts/build-install-jupyterlab-4.5.9.sh) | Automated build / install / start script |
 | [BUILDING.md](../BUILDING.md) | General source-build notes (jupyterlab-amphi + amphi-etl) |
 | [RELEASING.md](../RELEASING.md) | Tag-based PyPI release process |
 | [examples/README.md](../examples/README.md) | JupyterLab 4.4 / 4.5 / 4.6 compatibility matrix and example envs |
