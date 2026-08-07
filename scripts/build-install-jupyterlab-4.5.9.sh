@@ -17,22 +17,34 @@
 #   --notebook-dir DIR     Workspace for jupyter lab (default: <repo>/examples)
 #   --port PORT            JupyterLab port (default: 8888)
 #   --npm-registry URL     Set Yarn/npm registry (corporate Artifactory npm mirror)
+#   --python PATH          Python interpreter used to create .venv (must be >= 3.10)
+#   --recreate-venv        Delete and recreate .venv even if it already exists
 #   --non-editable         pip install . instead of pip install -e .
 #   -h, --help             Show this help
+#
+# Note: jupyterlab-amphi/requirements.txt pins matplotlib==3.10.8 which requires
+# Python >= 3.10. The script refuses Python 3.9 and prefers 3.11–3.13 when available.
 
 set -euo pipefail
 
 JUPYTERLAB_VERSION="4.5.9"
+MIN_PY_MAJOR=3
+MIN_PY_MINOR=10
 VENV_DIR=".venv"
 USE_VENV=1
 START_LAB=1
 EDITABLE=1
+RECREATE_VENV=0
 NOTEBOOK_DIR=""
 PORT="8888"
 NPM_REGISTRY=""
+PYTHON_BIN=""
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# Non-interactive shells (CI / IDE agents) often omit Homebrew /usr/local from PATH.
+export PATH="/usr/local/bin:/opt/homebrew/bin:${HOME}/miniconda3/bin:${HOME}/anaconda3/bin:${PATH}"
 
 usage() {
   awk '
@@ -50,14 +62,110 @@ log()  { printf '\n==> %s\n' "$*"; }
 die()  { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# Print "major.minor" for an interpreter, or empty on failure.
+py_version() {
+  local bin="$1"
+  "$bin" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || true
+}
+
+# Return 0 if $1 (major.minor) >= MIN_PY_MAJOR.MIN_PY_MINOR
+py_version_ok() {
+  local ver="$1"
+  [[ -n "${ver}" ]] || return 1
+  local major minor
+  major="${ver%%.*}"
+  minor="${ver#*.}"
+  minor="${minor%%.*}"
+  if (( major > MIN_PY_MAJOR )); then
+    return 0
+  fi
+  if (( major == MIN_PY_MAJOR && minor >= MIN_PY_MINOR )); then
+    return 0
+  fi
+  return 1
+}
+
+# Prefer an explicit --python, else newest available 3.13→3.10, else python3/python if new enough.
+# Also probes common Homebrew / Miniconda / Anaconda prefixes when not on PATH.
+resolve_python_for_venv() {
+  if [[ -n "${PYTHON_BIN}" ]]; then
+    have "${PYTHON_BIN}" || [[ -x "${PYTHON_BIN}" ]] \
+      || die "--python '${PYTHON_BIN}' not found or not executable"
+    local ver
+    ver="$(py_version "${PYTHON_BIN}")"
+    py_version_ok "${ver}" \
+      || die "--python '${PYTHON_BIN}' is Python ${ver:-unknown}; need >= ${MIN_PY_MAJOR}.${MIN_PY_MINOR} (matplotlib==3.10.8)"
+    printf '%s\n' "${PYTHON_BIN}"
+    return 0
+  fi
+
+  local candidate ver path
+  local -a candidates=()
+
+  for candidate in python3.13 python3.12 python3.11 python3.10 python3 python; do
+    if have "${candidate}"; then
+      candidates+=("$(command -v "${candidate}")")
+    fi
+  done
+
+  for path in \
+      "${HOME}/miniconda3/bin" \
+      "${HOME}/anaconda3/bin" \
+      "/opt/homebrew/bin" \
+      "/usr/local/bin"; do
+    for candidate in python3.13 python3.12 python3.11 python3.10; do
+      if [[ -x "${path}/${candidate}" ]]; then
+        candidates+=("${path}/${candidate}")
+      fi
+    done
+  done
+
+  # Deduplicate while preserving order
+  local -a unique=()
+  local c u seen
+  for c in "${candidates[@]}"; do
+    seen=0
+    for u in "${unique[@]+"${unique[@]}"}"; do
+      [[ "${u}" == "${c}" ]] && seen=1 && break
+    done
+    [[ "${seen}" -eq 0 ]] && unique+=("${c}")
+  done
+
+  for candidate in "${unique[@]+"${unique[@]}"}"; do
+    ver="$(py_version "${candidate}")"
+    if py_version_ok "${ver}"; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+    printf 'WARNING: skipping %s (Python %s < %s.%s)\n' \
+      "${candidate}" "${ver:-unknown}" "${MIN_PY_MAJOR}" "${MIN_PY_MINOR}" >&2
+  done
+
+  die "No Python >= ${MIN_PY_MAJOR}.${MIN_PY_MINOR} found. Install 3.10+ (e.g. python3.11/3.12/3.13) or pass --python /path/to/python. macOS /usr/bin/python3 is often 3.9 and cannot install matplotlib==3.10.8."
+}
+
+require_active_python() {
+  local ver
+  ver="$(py_version "${PYTHON}")"
+  py_version_ok "${ver}" || die \
+    "Active Python is ${ver:-unknown} ($(command -v "${PYTHON}")). Need >= ${MIN_PY_MAJOR}.${MIN_PY_MINOR} because jupyterlab-amphi pins matplotlib==3.10.8.
+Fix:
+  rm -rf ${REPO_ROOT}/${VENV_DIR}
+  ./scripts/build-install-jupyterlab-4.5.9.sh --recreate-venv
+Or:
+  ./scripts/build-install-jupyterlab-4.5.9.sh --python \$(command -v python3.13)"
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --no-venv)       USE_VENV=0; shift ;;
     --no-start)      START_LAB=0; shift ;;
     --non-editable)  EDITABLE=0; shift ;;
+    --recreate-venv) RECREATE_VENV=1; shift ;;
     --notebook-dir)  NOTEBOOK_DIR="${2:-}"; shift 2 ;;
     --port)          PORT="${2:-}"; shift 2 ;;
     --npm-registry)  NPM_REGISTRY="${2:-}"; shift 2 ;;
+    --python)        PYTHON_BIN="${2:-}"; shift 2 ;;
     -h|--help)       usage; exit 0 ;;
     *)               die "Unknown option: $1 (try --help)" ;;
   esac
@@ -70,21 +178,33 @@ fi
 cd "${REPO_ROOT}"
 
 # ---------------------------------------------------------------------------
-# 1) Virtualenv
+# 1) Virtualenv (Python >= 3.10 required)
 # ---------------------------------------------------------------------------
 if [[ "${USE_VENV}" -eq 1 ]]; then
-  if [[ ! -d "${REPO_ROOT}/${VENV_DIR}" ]]; then
-    log "Creating virtualenv ${REPO_ROOT}/${VENV_DIR}"
-    if have python3; then
-      python3 -m venv "${REPO_ROOT}/${VENV_DIR}"
-    elif have python; then
-      python -m venv "${REPO_ROOT}/${VENV_DIR}"
-    else
-      die "python3/python not found"
-    fi
-  else
-    log "Reusing existing virtualenv ${REPO_ROOT}/${VENV_DIR}"
+  VENV_PYTHON="$(resolve_python_for_venv)"
+  log "Selected Python for venv: ${VENV_PYTHON} ($(py_version "${VENV_PYTHON}"))"
+
+  if [[ "${RECREATE_VENV}" -eq 1 && -d "${REPO_ROOT}/${VENV_DIR}" ]]; then
+    log "Removing existing ${REPO_ROOT}/${VENV_DIR} (--recreate-venv)"
+    rm -rf "${REPO_ROOT}/${VENV_DIR}"
   fi
+
+  if [[ -d "${REPO_ROOT}/${VENV_DIR}" ]]; then
+    existing_py="${REPO_ROOT}/${VENV_DIR}/bin/python"
+    existing_ver="$(py_version "${existing_py}")"
+    if ! py_version_ok "${existing_ver}"; then
+      log "Existing .venv uses Python ${existing_ver:-unknown} (< ${MIN_PY_MAJOR}.${MIN_PY_MINOR}); recreating with ${VENV_PYTHON}"
+      rm -rf "${REPO_ROOT}/${VENV_DIR}"
+    else
+      log "Reusing existing virtualenv ${REPO_ROOT}/${VENV_DIR} (Python ${existing_ver})"
+    fi
+  fi
+
+  if [[ ! -d "${REPO_ROOT}/${VENV_DIR}" ]]; then
+    log "Creating virtualenv ${REPO_ROOT}/${VENV_DIR} with ${VENV_PYTHON}"
+    "${VENV_PYTHON}" -m venv "${REPO_ROOT}/${VENV_DIR}"
+  fi
+
   # shellcheck disable=SC1091
   source "${REPO_ROOT}/${VENV_DIR}/bin/activate"
 else
@@ -99,6 +219,7 @@ else
   die "python not found in PATH"
 fi
 
+require_active_python
 log "Python: $(${PYTHON} -V) ($(command -v "${PYTHON}"))"
 
 # ---------------------------------------------------------------------------
@@ -183,18 +304,21 @@ configure_npm_registry() {
 
 pip_install_reqs_without_dot() {
   # requirements.txt often ends with "." which would trigger hatch/jlpm too early.
+  # Also drop jupyterlab / notebook range pins that can pull JL past 4.5.9.
   local reqs="$1"
   if [[ ! -f "${reqs}" ]]; then
     return 0
   fi
   local filtered
   filtered="$(mktemp)"
-  # Drop blank lines, comments, and a lone "." package self-reference
-  grep -vE '^\s*($|#|\.$)' "${reqs}" >"${filtered}" || true
+  # Drop blank lines, comments, a lone "." self-reference, and jupyterlab/notebook constraints
+  grep -vE '^\s*($|#|\.$|(jupyterlab|notebook)([<>=!~]=|[<>=]))' "${reqs}" >"${filtered}" || true
   if [[ -s "${filtered}" ]]; then
     ${PYTHON} -m pip install -r "${filtered}"
   fi
   rm -f "${filtered}"
+  # Keep the exact JupyterLab version + a notebook line compatible with it
+  ${PYTHON} -m pip install "jupyterlab==${JUPYTERLAB_VERSION}" 'notebook>=7.4.0,<7.6'
 }
 
 pip_install_package() {

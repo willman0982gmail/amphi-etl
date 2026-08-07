@@ -15,6 +15,12 @@ Use the helper script to create `.venv`, install JupyterLab **4.5.9**, build/ins
 # From repository root
 ./scripts/build-install-jupyterlab-4.5.9.sh
 
+# Rebuild after a Python 3.9 .venv mistake (auto-recreates if < 3.10)
+./scripts/build-install-jupyterlab-4.5.9.sh --recreate-venv --no-start
+
+# Force a specific interpreter
+./scripts/build-install-jupyterlab-4.5.9.sh --python "$(command -v python3.13)" --recreate-venv
+
 # Build only (no JupyterLab process)
 ./scripts/build-install-jupyterlab-4.5.9.sh --no-start
 
@@ -28,7 +34,7 @@ Use the helper script to create `.venv`, install JupyterLab **4.5.9**, build/ins
 ./scripts/build-install-jupyterlab-4.5.9.sh --notebook-dir "$HOME/workspace" --port 8889
 ```
 
-The script prefers **`jlpm`**, falling back to **`npm`** for `install` and `run build:prod`. Run `./scripts/build-install-jupyterlab-4.5.9.sh --help` for all options.
+The script prefers **`jlpm`**, falling back to **`npm`** for `install` and `run build:prod`. It also prefers **Python 3.13→3.10** when creating `.venv` (skips system 3.9). Run `./scripts/build-install-jupyterlab-4.5.9.sh --help` for all options.
 
 ---
 
@@ -53,7 +59,7 @@ The script prefers **`jlpm`**, falling back to **`npm`** for `install` and `run 
 
 | Requirement | Notes |
 |-------------|--------|
-| **Python** | 3.8+ (3.11 recommended) |
+| **Python** | **>= 3.10** required (`matplotlib==3.10.8`); 3.11–3.13 recommended. macOS `/usr/bin/python3` is often 3.9 and will fail. |
 | **Node.js** | 18+ or 20 LTS (required for `jlpm` / frontend builds) |
 | **Yarn** | Provided by JupyterLab as `jlpm` after JupyterLab is installed |
 | **Git** | To clone this repository |
@@ -501,6 +507,7 @@ Clear the browser cache if extensions were reinstalled and the UI looks stale.
 
 | Issue | What to do |
 |-------|------------|
+| `No matching distribution found for matplotlib==3.10.8` | `.venv` was created with **Python 3.9** (often macOS `/usr/bin/python3`). `matplotlib==3.10.8` needs **Python >= 3.10**. Re-run: `./scripts/build-install-jupyterlab-4.5.9.sh --recreate-venv` (or `--python "$(command -v python3.13)" --recreate-venv`). |
 | `ENOTFOUND registry.npmjs.org` / `jlpm install` fails | pip uses Artifactory; Yarn still hits public npm. Configure corporate npm registry or proxy — see [§4](#4-corporate-network--npm-registry-required-behind-artifactory). |
 | `metadata-generation-failed` / `Command '['jlpm', 'install']'` | Same as above: hatch runs `jlpm` during `pip install -e .`. Fix Yarn registry, then pre-run `jlpm install && jlpm build:prod` before pip. |
 | `Successfully installed` but Lab extension missing/broken | Treat as failed build. Re-run `jlpm build:prod`, reinstall, then `jupyter labextension list --verbose`. |
