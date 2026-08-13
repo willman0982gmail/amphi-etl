@@ -46,8 +46,8 @@ NOTEBOOK_DIR=""
 PORT="8888"
 NPM_REGISTRY=""
 PYTHON_BIN=""
-CA_BUNDLE=""
-CORP_CA=""
+CA_BUNDLE="$HOME/gdp/cacert/cacert.pem"
+CORP_CA="$HOME/gdp/cacert/cacert.pem"
 READONLY_EXTENSIONS=0
 LAB_EXTRA_ARGS=()
 
