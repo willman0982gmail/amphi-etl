@@ -20,10 +20,17 @@
 #   --python PATH          Python interpreter used to create .venv (must be >= 3.10)
 #   --recreate-venv        Delete and recreate .venv even if it already exists
 #   --non-editable         pip install . instead of pip install -e .
+#   --ca-bundle PATH       PEM CA bundle for SSL (SSL_CERT_FILE / REQUESTS_CA_BUNDLE)
+#   --corp-ca PATH         Append corporate root CA PEM to certifi (TLS inspection / Artifactory)
+#   --readonly-extensions  Start Lab with LabApp.extension_manager=readonly (no PyPI fetch)
 #   -h, --help             Show this help
 #
 # Note: jupyterlab-amphi/requirements.txt pins matplotlib==3.10.8 which requires
 # Python >= 3.10. The script refuses Python 3.9 and prefers 3.11–3.13 when available.
+#
+# SSL: JupyterLab's Extension Manager uses httpx against PyPI. Missing macOS / corp
+# CAs cause: SSL: CERTIFICATE_VERIFY_FAILED ... unable to get local issuer certificate.
+# This script installs certifi, exports SSL_CERT_FILE, and can merge a corp CA.
 
 set -euo pipefail
 
@@ -39,6 +46,10 @@ NOTEBOOK_DIR=""
 PORT="8888"
 NPM_REGISTRY=""
 PYTHON_BIN=""
+CA_BUNDLE=""
+CORP_CA=""
+READONLY_EXTENSIONS=0
+LAB_EXTRA_ARGS=()
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -156,16 +167,75 @@ Or:
   ./scripts/build-install-jupyterlab-4.5.9.sh --python \$(command -v python3.13)"
 }
 
+# Install certifi and export SSL_* so httpx/requests (JupyterLab Extension Manager → PyPI)
+# and pip do not fail with CERTIFICATE_VERIFY_FAILED on macOS / corp TLS inspection.
+configure_ssl() {
+  log "Configuring SSL CA certificates (certifi)"
+  ${PYTHON} -m pip install --upgrade certifi >/dev/null
+
+  local certifi_pem combined
+  certifi_pem="$(${PYTHON} -c 'import certifi; print(certifi.where())')"
+  [[ -f "${certifi_pem}" ]] || die "certifi CA bundle not found at ${certifi_pem}"
+
+  # Honor CLI / env overrides (CORP_CA_FILE is a common corp convention)
+  if [[ -z "${CORP_CA}" && -n "${CORP_CA_FILE:-}" ]]; then
+    CORP_CA="${CORP_CA_FILE}"
+  fi
+  if [[ -z "${CA_BUNDLE}" && -n "${SSL_CERT_FILE:-}" && -f "${SSL_CERT_FILE}" ]]; then
+    # Keep an explicitly pre-set SSL_CERT_FILE unless --ca-bundle/--corp-ca requested
+    if [[ -z "${CORP_CA}" ]]; then
+      log "Using existing SSL_CERT_FILE=${SSL_CERT_FILE}"
+      export REQUESTS_CA_BUNDLE="${SSL_CERT_FILE}"
+      export CURL_CA_BUNDLE="${SSL_CERT_FILE}"
+      export NODE_EXTRA_CA_CERTS="${NODE_EXTRA_CA_CERTS:-${SSL_CERT_FILE}}"
+      return 0
+    fi
+  fi
+
+  if [[ -n "${CA_BUNDLE}" ]]; then
+    [[ -f "${CA_BUNDLE}" ]] || die "--ca-bundle not found: ${CA_BUNDLE}"
+    combined="${CA_BUNDLE}"
+  elif [[ -n "${CORP_CA}" ]]; then
+    [[ -f "${CORP_CA}" ]] || die "--corp-ca / CORP_CA_FILE not found: ${CORP_CA}"
+    combined="${REPO_ROOT}/${VENV_DIR}/amphi-ca-bundle.pem"
+    mkdir -p "$(dirname "${combined}")"
+    cat "${certifi_pem}" "${CORP_CA}" >"${combined}"
+    log "Merged certifi + corp CA → ${combined}"
+  else
+    combined="${certifi_pem}"
+  fi
+
+  export SSL_CERT_FILE="${combined}"
+  export REQUESTS_CA_BUNDLE="${combined}"
+  export CURL_CA_BUNDLE="${combined}"
+  # Helps Node/jlpm when corp TLS inspection is present
+  export NODE_EXTRA_CA_CERTS="${NODE_EXTRA_CA_CERTS:-${combined}}"
+
+  log "SSL_CERT_FILE=${SSL_CERT_FILE}"
+
+  # Quick sanity check (non-fatal): can we verify a public TLS endpoint?
+  if ! ${PYTHON} -c 'import urllib.request; urllib.request.urlopen("https://pypi.org/simple/pip/", timeout=10)' >/dev/null 2>&1; then
+    printf 'WARNING: TLS check to pypi.org failed. Extension Manager may still error with\n' >&2
+    printf '         CERTIFICATE_VERIFY_FAILED. Pass --corp-ca /path/to/corp-root.pem\n' >&2
+    printf '         or start with --readonly-extensions to avoid PyPI metadata fetches.\n' >&2
+  else
+    log "TLS check to pypi.org OK"
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --no-venv)       USE_VENV=0; shift ;;
     --no-start)      START_LAB=0; shift ;;
     --non-editable)  EDITABLE=0; shift ;;
     --recreate-venv) RECREATE_VENV=1; shift ;;
+    --readonly-extensions) READONLY_EXTENSIONS=1; shift ;;
     --notebook-dir)  NOTEBOOK_DIR="${2:-}"; shift 2 ;;
     --port)          PORT="${2:-}"; shift 2 ;;
     --npm-registry)  NPM_REGISTRY="${2:-}"; shift 2 ;;
     --python)        PYTHON_BIN="${2:-}"; shift 2 ;;
+    --ca-bundle)     CA_BUNDLE="${2:-}"; shift 2 ;;
+    --corp-ca)       CORP_CA="${2:-}"; shift 2 ;;
     -h|--help)       usage; exit 0 ;;
     *)               die "Unknown option: $1 (try --help)" ;;
   esac
@@ -227,6 +297,9 @@ log "Python: $(${PYTHON} -V) ($(command -v "${PYTHON}"))"
 # ---------------------------------------------------------------------------
 log "Upgrading pip / setuptools / wheel / build"
 ${PYTHON} -m pip install --upgrade pip setuptools wheel build
+
+# SSL before further network installs / Lab start (fixes Extension Manager PyPI TLS errors)
+configure_ssl
 
 log "Installing JupyterLab == ${JUPYTERLAB_VERSION}"
 ${PYTHON} -m pip install "jupyterlab==${JUPYTERLAB_VERSION}"
@@ -371,18 +444,41 @@ ${PYTHON} -m jupyter server extension list 2>&1 | grep -E 'pipeline_scheduler|ju
 # ---------------------------------------------------------------------------
 # 5) Start JupyterLab
 # ---------------------------------------------------------------------------
+if [[ "${READONLY_EXTENSIONS}" -eq 1 ]]; then
+  LAB_EXTRA_ARGS+=(--LabApp.extension_manager=readonly)
+fi
+
 if [[ "${START_LAB}" -eq 1 ]]; then
   mkdir -p "${NOTEBOOK_DIR}"
+  # Re-apply SSL in case pip upgraded certifi during package installs
+  configure_ssl
   log "Starting JupyterLab ${JUPYTERLAB_VERSION}"
   log "  notebook-dir: ${NOTEBOOK_DIR}"
   log "  port:         ${PORT}"
+  log "  SSL_CERT_FILE=${SSL_CERT_FILE:-<unset>}"
+  if [[ "${READONLY_EXTENSIONS}" -eq 1 ]]; then
+    log "  extension_manager=readonly (skips PyPI Extension Manager fetches)"
+  fi
   exec ${PYTHON} -m jupyter lab \
     --notebook-dir="${NOTEBOOK_DIR}" \
     --ContentManager.allow_hidden=True \
-    --port="${PORT}"
+    --port="${PORT}" \
+    "${LAB_EXTRA_ARGS[@]+"${LAB_EXTRA_ARGS[@]}"}"
 else
   log "Build & install complete (--no-start). To launch:"
   printf '  source %s/bin/activate\n' "${REPO_ROOT}/${VENV_DIR}"
-  printf '  jupyter lab --notebook-dir=%s --ContentManager.allow_hidden=True --port=%s\n' \
+  printf '  export SSL_CERT_FILE="$(python -c '\''import certifi; print(certifi.where())'\'')"\n'
+  printf '  export REQUESTS_CA_BUNDLE="$SSL_CERT_FILE" CURL_CA_BUNDLE="$SSL_CERT_FILE"\n'
+  if [[ -n "${CORP_CA}" ]]; then
+    printf '  # or use merged bundle:\n'
+    printf '  # export SSL_CERT_FILE=%s/%s/amphi-ca-bundle.pem\n' "${REPO_ROOT}" "${VENV_DIR}"
+  fi
+  printf '  jupyter lab --notebook-dir=%s --ContentManager.allow_hidden=True --port=%s' \
     "${NOTEBOOK_DIR}" "${PORT}"
+  if [[ "${READONLY_EXTENSIONS}" -eq 1 ]]; then
+    printf ' --LabApp.extension_manager=readonly'
+  fi
+  printf '\n'
+  printf '  # If Extension Manager still fails TLS: add --corp-ca /path/to/corp-root.pem\n'
+  printf '  # or --readonly-extensions\n'
 fi

@@ -30,11 +30,16 @@ Use the helper script to create `.venv`, install JupyterLab **4.5.9**, build/ins
 # Corporate npm Artifactory mirror
 ./scripts/build-install-jupyterlab-4.5.9.sh --npm-registry "https://artifactory.example/artifactory/api/npm/<repo>/"
 
+# Fix Extension Manager SSL / corp TLS inspection
+./scripts/build-install-jupyterlab-4.5.9.sh --corp-ca /path/to/corp-root-ca.pem
+# or skip PyPI Extension Manager lookups:
+./scripts/build-install-jupyterlab-4.5.9.sh --readonly-extensions
+
 # Custom workspace / port
 ./scripts/build-install-jupyterlab-4.5.9.sh --notebook-dir "$HOME/workspace" --port 8889
 ```
 
-The script prefers **`jlpm`**, falling back to **`npm`** for `install` and `run build:prod`. It also prefers **Python 3.13→3.10** when creating `.venv` (skips system 3.9). Run `./scripts/build-install-jupyterlab-4.5.9.sh --help` for all options.
+The script prefers **`jlpm`**, falling back to **`npm`** for `install` and `run build:prod`. It also prefers **Python 3.13→3.10** when creating `.venv` (skips system 3.9), installs **certifi**, and exports `SSL_CERT_FILE` so JupyterLab’s Extension Manager does not fail with `CERTIFICATE_VERIFY_FAILED`. Run `./scripts/build-install-jupyterlab-4.5.9.sh --help` for all options.
 
 ---
 
@@ -507,6 +512,7 @@ Clear the browser cache if extensions were reinstalled and the UI looks stale.
 
 | Issue | What to do |
 |-------|------------|
+| `SSL: CERTIFICATE_VERIFY_FAILED` / Extension Manager `/lab/api/extensions` crash | JupyterLab fetches PyPI over TLS. The script installs **certifi** and sets `SSL_CERT_FILE`. Behind corp TLS inspection, pass `--corp-ca /path/to/corp-root.pem` (or `CORP_CA_FILE=...`). To avoid PyPI fetches entirely: `--readonly-extensions`. |
 | `No matching distribution found for matplotlib==3.10.8` | `.venv` was created with **Python 3.9** (often macOS `/usr/bin/python3`). `matplotlib==3.10.8` needs **Python >= 3.10**. Re-run: `./scripts/build-install-jupyterlab-4.5.9.sh --recreate-venv` (or `--python "$(command -v python3.13)" --recreate-venv`). |
 | `ENOTFOUND registry.npmjs.org` / `jlpm install` fails | pip uses Artifactory; Yarn still hits public npm. Configure corporate npm registry or proxy — see [§4](#4-corporate-network--npm-registry-required-behind-artifactory). |
 | `metadata-generation-failed` / `Command '['jlpm', 'install']'` | Same as above: hatch runs `jlpm` during `pip install -e .`. Fix Yarn registry, then pre-run `jlpm install && jlpm build:prod` before pip. |
