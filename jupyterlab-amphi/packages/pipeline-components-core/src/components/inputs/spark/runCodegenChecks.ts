@@ -72,11 +72,13 @@ import {
 } from './sparkSqlCodegen';
 import {
   appendTokenToConnectUrl,
+  extractGdpConnectId,
   extractTrailingLimit,
   hasMultipleSqlStatements,
   isValidTableIdentifier,
   parseMaxRows,
   quoteTableIdentifier,
+  redactSparkConnectSecrets,
   resolveEffectiveMaxRows,
   resolveQualifiedTableName
 } from './sparkSqlUtils';
@@ -100,6 +102,26 @@ assert.strictEqual(resolveEffectiveMaxRows(10000, 'SELECT * FROM t LIMIT 100'), 
 assert.strictEqual(
   appendTokenToConnectUrl('sc://host:15002', 'abc'),
   'sc://host:15002/;token=abc'
+);
+
+// G4 — GDP External URL: token append must not strip x-gdp-connect-id
+const gdpUrl =
+  'sc://spark-connect-dedicated.example.com:443/;x-gdp-connect-id:connect-aaaa';
+const gdpWithToken = appendTokenToConnectUrl(gdpUrl, 'sekrit');
+assert.ok(gdpWithToken.includes('x-gdp-connect-id:connect-aaaa'));
+assert.ok(gdpWithToken.includes('token=sekrit'));
+assert.strictEqual(extractGdpConnectId(gdpWithToken), 'connect-aaaa');
+assert.strictEqual(
+  redactSparkConnectSecrets(gdpWithToken),
+  'sc://spark-connect-dedicated.example.com:443/;x-gdp-connect-id:connect-aaaa;token=***'
+);
+// Already has token — leave Connect ID intact, do not duplicate token
+assert.strictEqual(
+  appendTokenToConnectUrl(
+    'sc://h:443/;token=t;x-gdp-connect-id:cid',
+    'other'
+  ),
+  'sc://h:443/;token=t;x-gdp-connect-id:cid'
 );
 
 const queryCode = generateSparkSqlInputCode(
@@ -190,6 +212,8 @@ const sessionCode = generateSparkSessionBuilderCode({
 assert.ok(sessionCode.includes('Spark Connect Session'));
 assert.ok(sessionCode.includes('.remote(_spark_url)'));
 assert.ok(sessionCode.includes('spark ='));
+assert.ok(sessionCode.includes('x-gdp-connect-id'));
+assert.ok(sessionCode.includes('Ready session'));
 
 const databricksCode = generateSparkSqlInputCode(
   {

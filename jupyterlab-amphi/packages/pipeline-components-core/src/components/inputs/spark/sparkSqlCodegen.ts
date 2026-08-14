@@ -153,6 +153,8 @@ except Exception as _amphi_spark_err:
     raise RuntimeError(
         "Spark Connect Session failed (Connect URL / auth). "
         "Check SPARK_CONNECT_URL (or SPARK_REMOTE), token/user/cluster, client≈server PySpark version (3.5+). "
+        "For GDP Spark Gateway External URLs, confirm x-gdp-connect-id matches a Ready session "
+        "and SPARK_TOKEN is set; start Stopped sessions in the Gateway portal first. "
         f"Underlying error: {_amphi_spark_err}"
     ) from _amphi_spark_err
 `;
@@ -249,6 +251,8 @@ except Exception as _amphi_spark_err:
     raise RuntimeError(
         "Spark SQL Input failed (Connect URL / auth / SQL). "
         "Check SPARK_CONNECT_URL (or SPARK_REMOTE), token/user/cluster, client≈server PySpark version (3.5+), and the SQL. "
+        "For GDP Spark Gateway External URLs, confirm x-gdp-connect-id matches a Ready session "
+        "and SPARK_TOKEN is set; start Stopped sessions in the Gateway portal first. "
         f"Underlying error: {_amphi_spark_err}"
     ) from _amphi_spark_err
 `;
@@ -1213,6 +1217,8 @@ except Exception as _amphi_spark_err:
     raise RuntimeError(
         "Spark File Input failed (Connect URL / auth / path / format). "
         "Check SPARK_CONNECT_URL, credentials, and that the path is visible to the cluster. "
+        "For GDP Spark Gateway External URLs, confirm x-gdp-connect-id matches a Ready session "
+        "and SPARK_TOKEN is set; start Stopped sessions in the Gateway portal first. "
         f"Underlying error: {_amphi_spark_err}"
     ) from _amphi_spark_err
 `;

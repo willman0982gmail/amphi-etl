@@ -58,6 +58,15 @@ export class SparkSqlNativeInput extends BaseCoreComponent {
           connectionVariableName: 'SPARK_CONNECT_URL'
         },
         {
+          type: 'gdpSparkGatewayBrowse',
+          label: 'GDP Spark Gateway',
+          id: 'tsCFgdpSparkGatewayBrowse',
+          tooltip:
+            'Optional shortcut to fill Connect URL from a Ready Gateway session. Prefer Connection → Browse for reuse.',
+          connection: 'SparkConnect',
+          urlFieldId: 'tsCFinputSparkConnectUrl'
+        },
+        {
           type: 'input',
           label: 'Databricks cluster ID',
           id: 'tsCFinputDatabricksClusterId',

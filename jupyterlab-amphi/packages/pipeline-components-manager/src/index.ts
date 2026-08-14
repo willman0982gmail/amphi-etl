@@ -17,6 +17,26 @@ export { InputFile, InputRegular, SelectRegular, SelectColumns, CodeTextarea, Co
 export { ExecutionMetadata, ExecutionResult } from './ExecutionTypes';
 export { IPipelineExecutionService, IPipelineExecutionToken } from './ExecutionToken';
 export { ExecutionBadge } from './ExecutionBadge';
+export {
+  SparkGatewaySessionPicker,
+  createGdpSparkGatewayClient,
+  getGdpGatewayConfig,
+  isGdpGatewayBrowseEnabled,
+  applySessionToConnectionVariables,
+  suggestConnectionNameFromSession,
+  FIXTURE_NAMESPACE,
+  FIXTURE_SESSIONS,
+  FIXTURE_LIST_RESPONSE,
+  buildExternalConnectUrl,
+  mapGatewaySession
+} from './gdpSparkGateway';
+export type {
+  GdpSparkConnectSession,
+  GdpSparkGatewayClient,
+  GdpGatewayConfig,
+  GdpUrlPreference,
+  SparkGatewaySessionPickerProps
+} from './gdpSparkGateway';
 
 // === Types ===
 interface ComponentItem {

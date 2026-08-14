@@ -1,10 +1,29 @@
-import { ComponentItem, InputFile, InputRegular, Option, PipelineComponent, PipelineService, SelectRegular, createZoomSelector, onChange, renderComponentUI, renderHandle } from '@amphi/pipeline-components-manager';
+import {
+  ComponentItem,
+  InputFile,
+  InputRegular,
+  Option,
+  PipelineComponent,
+  PipelineService,
+  SelectRegular,
+  SparkGatewaySessionPicker,
+  applySessionToConnectionVariables,
+  createZoomSelector,
+  getGdpGatewayConfig,
+  isGdpGatewayBrowseEnabled,
+  onChange,
+  renderComponentUI,
+  renderHandle,
+  suggestConnectionNameFromSession
+} from '@amphi/pipeline-components-manager';
+import type { GdpSparkConnectSession, GdpUrlPreference } from '@amphi/pipeline-components-manager';
 import { CopyOutlined } from '@ant-design/icons';
 import type { GetRef, InputRef } from 'antd';
-import { ConfigProvider, Form, Input, Modal, Select, Space, Table, Tooltip } from 'antd';
+import { Button, ConfigProvider, Form, Input, Modal, Select, Space, Table, Tooltip } from 'antd';
 import React, { useCallback, useContext, useEffect, useRef, useState, useMemo } from 'react';
 import { Handle, NodeToolbar, Position, useReactFlow, useStore, useStoreApi } from 'reactflow';
 import { keyIcon, settingsIcon } from '../../icons';
+
 
 export class Connection extends PipelineComponent<ComponentItem>() {
   public _name = "Connection";
@@ -18,7 +37,11 @@ export class Connection extends PipelineComponent<ComponentItem>() {
   For Spark SQL Input (connection type SparkConnect), recommended keys / env names:
   SPARK_CONNECT_URL or SPARK_REMOTE (e.g. sc://host:15002), SPARK_TOKEN (optional),
   SPARK_USER / SPARK_PASSWORD (optional userpass), DATABRICKS_CLUSTER_ID (Databricks preset),
-  SPARK_APP_NAME (optional).`;
+  SPARK_APP_NAME (optional).
+
+  GDP Spark Gateway: use Browse GDP sessions… when configured to fill SPARK_CONNECT_URL
+  (full External URL including x-gdp-connect-id). Optional metadata: GDP_CONNECT_ID, GDP_CONNECT_NAME.
+  Keep SPARK_TOKEN in env / .env — Browse does not write tokens into .ampln.`;
   public _icon = keyIcon;
   public _default = {};
   public _form = {};
@@ -169,6 +192,10 @@ export class Connection extends PipelineComponent<ComponentItem>() {
     }
 
     const [envVarFile, setEnvVarFile] = useState<Option>(data.envVarFile || "");
+    const [gatewayPickerOpen, setGatewayPickerOpen] = useState(false);
+    const gatewayBrowseEnabled = isGdpGatewayBrowseEnabled();
+    const isSparkConnect =
+      (selectedConnection?.value || data.connectionType) === 'SparkConnect';
 
     useEffect(() => {
       handleChange(dataSource, "variables");
@@ -340,6 +367,49 @@ export class Connection extends PipelineComponent<ComponentItem>() {
 
     const connectionNameTooltip = "Provide a name to the connection to describe and differentiate it with other connections."
 
+    const handleGatewaySelect = useCallback(
+      (
+        session: GdpSparkConnectSession,
+        meta: { urlPreference: GdpUrlPreference }
+      ) => {
+        try {
+          const nextVars = applySessionToConnectionVariables(
+            dataSource as any,
+            session,
+            {
+              fetchMethod: String(data.fetchMethod || fetchMethod || 'clear'),
+              urlPreference: meta.urlPreference,
+              externalHost: getGdpGatewayConfig().sparkConnectExternalHost,
+              writeMetadata: true
+            }
+          );
+          setDataSource(nextVars as DataType[]);
+          const suggested = suggestConnectionNameFromSession(
+            connectionName,
+            session
+          );
+          if (suggested && suggested !== connectionName) {
+            setConnectionName(suggested);
+            handleChange(suggested, 'connectionName');
+            if (!data.customTitle) {
+              handleChange(`${suggested} Connection`, 'customTitle');
+            }
+          }
+          setGatewayPickerOpen(false);
+        } catch (err: any) {
+          console.error('[Amphi] Failed to apply GDP session', err);
+        }
+      },
+      [
+        connectionName,
+        data.customTitle,
+        data.fetchMethod,
+        dataSource,
+        fetchMethod,
+        handleChange
+      ]
+    );
+
     return (
       <>
         <ConfigProvider
@@ -391,6 +461,30 @@ export class Connection extends PipelineComponent<ComponentItem>() {
                   size="middle"
                 />
               </Form.Item>
+              {isSparkConnect && (
+                <Form.Item
+                  label="GDP Spark Gateway"
+                  tooltip="Browse Ready Spark Connect sessions and write SPARK_CONNECT_URL (including x-gdp-connect-id for External). Requires gdpSparkGatewayUrl or fixture mode."
+                >
+                  <Space>
+                    <Button
+                      type="default"
+                      disabled={!gatewayBrowseEnabled}
+                      onClick={() => setGatewayPickerOpen(true)}
+                    >
+                      Browse GDP sessions…
+                    </Button>
+                    {!gatewayBrowseEnabled && (
+                      <span style={{ color: '#8c8c8c', fontSize: 12 }}>
+                        Disabled — start Lab with{' '}
+                        <code>--config=examples/jupyter_gdp_gateway_pageconfig.py</code>{' '}
+                        (fixture) or set PageConfig{' '}
+                        <code>gdpSparkGatewayUrl</code>
+                      </span>
+                    )}
+                  </Space>
+                </Form.Item>
+              )}
               <br />
               <Form.Item label="Connection Name"
                 tooltip={connectionNameTooltip} >
@@ -457,6 +551,11 @@ export class Connection extends PipelineComponent<ComponentItem>() {
                 />
               </Form.Item>
             </Form>
+            <SparkGatewaySessionPicker
+              open={gatewayPickerOpen}
+              onCancel={() => setGatewayPickerOpen(false)}
+              onSelect={handleGatewaySelect}
+            />
           </Modal>
         </ConfigProvider>
       </>

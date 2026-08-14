@@ -100,6 +100,16 @@ export class SparkFileInput extends BaseCoreComponent {
           tooltip: 'Fallback Connect URL when not using a shared Session.'
         },
         {
+          type: 'gdpSparkGatewayBrowse',
+          label: 'GDP Spark Gateway',
+          id: 'tsCFgdpSparkGatewayBrowse',
+          advanced: true,
+          tooltip:
+            'Optional shortcut to fill Connect URL from a Ready Gateway session when not using a shared Session.',
+          connection: 'SparkConnect',
+          urlFieldId: 'tsCFinputSparkConnectUrl'
+        },
+        {
           type: 'input',
           label: 'Databricks cluster ID',
           id: 'tsCFinputDatabricksClusterId',

@@ -49,6 +49,15 @@ export class SparkConnectSession extends BaseCoreComponent {
           connectionVariableName: 'SPARK_CONNECT_URL'
         },
         {
+          type: 'gdpSparkGatewayBrowse',
+          label: 'GDP Spark Gateway',
+          id: 'tsCFgdpSparkGatewayBrowse',
+          tooltip:
+            'Browse Ready Tenant Connects and fill Spark Connect URL (including x-gdp-connect-id). Keep SPARK_TOKEN in env. Prefer configuring a Connection when multiple Inputs share the same session.',
+          connection: 'SparkConnect',
+          urlFieldId: 'tsCFinputSparkConnectUrl'
+        },
+        {
           type: 'input',
           label: 'Databricks cluster ID',
           id: 'tsCFinputDatabricksClusterId',
@@ -128,7 +137,7 @@ export class SparkConnectSession extends BaseCoreComponent {
     };
 
     const description =
-      'Create a shared SparkSession via Spark Connect for reuse by Spark SQL Input nodes. Place one session per pipeline; set Spark SQL Input session mode to Auto (default) or Always shared. Do not call spark.stop() automatically — restart the kernel to switch clusters.';
+      'Create a shared SparkSession via Spark Connect for reuse by Spark SQL Input nodes. Place one session per pipeline; set Spark SQL Input session mode to Auto (default) or Always shared. Use Browse GDP sessions… when Gateway is configured, or Select Connection / env for URL. Do not call spark.stop() automatically — restart the kernel to switch clusters.';
 
     super(
       'Spark Connect Session',

@@ -145,3 +145,30 @@ export function appendTokenToConnectUrl(url: string, token: string): string {
   }
   return `${base}/;token=${token}`;
 }
+
+/**
+ * Extract GDP Connect ID from a Spark Connect URL (`;x-gdp-connect-id:…`
+ * or `x-gdp-connect-id=`). Does not modify other URL params.
+ */
+export function extractGdpConnectId(url: string): string {
+  if (!url) {
+    return '';
+  }
+  const m =
+    String(url).match(/x-gdp-connect-id[=:]([^;&\s]+)/i) ||
+    String(url).match(/x_gdp_connect_id[=:]([^;&\s]+)/i);
+  return m ? m[1].trim() : '';
+}
+
+/** Redact token= values for logs / UI. Preserves x-gdp-connect-id. */
+export function redactSparkConnectSecrets(url: string): string {
+  if (!url) {
+    return '';
+  }
+  return String(url)
+    .replace(/([;/?&#]|^)(token=)([^;&\s]+)/gi, '$1$2***')
+    .replace(
+      /([;/?&#]|^)((?:password|passwd|secret)=)([^;&\s]+)/gi,
+      '$1$2***'
+    );
+}

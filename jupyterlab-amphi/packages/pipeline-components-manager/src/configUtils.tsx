@@ -28,6 +28,7 @@ import TransferData from './forms/transferData';
 import ValuesListForm from './forms/valuesListForm';
 import FormulaColumns from './forms/FormulaColumns';
 import DatePickerForm from './forms/DatePickerForm';
+import GdpSparkGatewayBrowse from './forms/GdpSparkGatewayBrowse';
 import { PipelineService } from './PipelineService';
 import { ThemeConsumer } from 'styled-components';
 import SelectSheetFromExcel from './forms/selectSheetFromExcel';
@@ -427,6 +428,15 @@ export const GenerateUIInputs = React.memo(({
         return renderFormItem(field, <DatePickerForm {...commonProps} value={value} />);
       case "info":
         return <Typography.Paragraph style={{ padding: '5px' }}>{field.text}</Typography.Paragraph>;
+      case "gdpSparkGatewayBrowse":
+        return renderFormItem(
+          field,
+          <GdpSparkGatewayBrowse
+            field={field}
+            handleChange={handleChange}
+            advanced={advanced}
+          />
+        );
       default:
         return null;
     }
@@ -675,7 +685,8 @@ export interface Option {
 export interface FieldDescriptor {
   type: 'file' | 'files' | 'column' | 'columns' | 'table' | 'sparkTable' | 'keyvalue' | 'valuesList' | 'input' | 'password' | 'select' | 'textarea' | 'codeTextarea' | 'radio'
   | 'cascader' | 'boolean' | 'inputNumber' | 'selectCustomizable' | 'selectTokenization' | 'transferData' | 'keyvalueColumns' | 'keyvalueColumnsSelect' | 'columnOperationColumn' | 'sheets'
-  | 'dataMapping' | 'editableTable' | 'info' | 'cascaderMultiple' | 'selectMultiple' | 'selectMultipleCustomizable' | 'formulaColumns' | 'keyvalueColumnsRadio' | 'date' | 'collection';
+  | 'dataMapping' | 'editableTable' | 'info' | 'cascaderMultiple' | 'selectMultiple' | 'selectMultipleCustomizable' | 'formulaColumns' | 'keyvalueColumnsRadio' | 'date' | 'collection'
+  | 'gdpSparkGatewayBrowse';
   label: string;
   id: string;
   placeholder?: any;
@@ -713,6 +724,8 @@ export interface FieldDescriptor {
   operatorLockedValues?: string[];
   operatorLockedWhenMissing?: boolean;
   columnId?: string | number;
+  /** Target URL field for gdpSparkGatewayBrowse (default tsCFinputSparkConnectUrl). */
+  urlFieldId?: string;
 }
 
 interface ConfigModalProps {
